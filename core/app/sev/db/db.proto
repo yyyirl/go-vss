@@ -1,0 +1,316 @@
+syntax = "proto3";
+
+package db;
+option go_package = "./db";
+
+import "google/protobuf/any.proto";
+import "google/protobuf/struct.proto";
+
+// -------------------------------- response
+
+message XResponse{
+    google.protobuf.Any Data = 1;
+    string license = 2;
+    int64 code = 3;
+}
+
+message Response{
+    bytes Data = 1;
+    string license = 2;
+    int64 code = 3;
+}
+
+// -------------------------------- request
+
+message XConditionOriginalItem {
+    string query = 1;
+    repeated google.protobuf.Any values = 2;
+}
+
+message XConditionItem {
+    string column = 1;
+    google.protobuf.Any value = 2;
+    repeated google.protobuf.Any values = 3;
+    string operator = 4;
+    bool useNil = 5;
+    XConditionOriginalItem original = 6;
+    string logicalOperator = 7;
+    repeated XConditionItem inner = 8;
+    repeated string columns = 9;
+}
+
+enum XSortDirection {
+    ASC = 0;
+    DESC = 1;
+}
+
+message XOrderItem {
+    string column = 1;
+    XSortDirection value = 2;
+}
+
+message XUpdateItem {
+    string column = 1;
+    google.protobuf.Any value = 2;
+}
+
+message UniqueIdsReq {
+    repeated string uniqueIds = 1;
+    string uniqueId = 2;
+}
+
+message XRequestParams {
+    repeated string columns = 1;
+    repeated XOrderItem orders = 2;
+    repeated XConditionItem conditions = 3;
+    repeated string uniqueIds = 4;
+    int64 limit = 5;
+    int64 page = 6;
+    string uniqueId = 7;
+    bool all = 8;
+    int64 type = 9;
+    bool ignoreNotFound = 10;
+    repeated XUpdateItem data = 11;
+    bytes bulkUpdates = 12;
+    google.protobuf.Struct dataRecord = 13;
+    string keyword = 14;
+    bool backend = 15;
+    repeated string IgnoreUpdateColumns = 16;
+}
+
+message EmptyRequest{
+}
+
+message MapReq {
+    google.protobuf.Struct Data = 1;
+}
+
+message SliceMapReq {
+    repeated google.protobuf.Struct Data = 1;
+}
+
+message IDReq {
+    uint64 ID = 1;
+}
+
+message IdsReq {
+    repeated uint64 ids = 1;
+}
+
+message UniqueIdReq {
+    string UniqueId = 1;
+}
+
+message TypeReq {
+    string Type = 1;
+}
+
+// -------------------------------- DeviceService
+
+message DeviceChannelReq {
+    string DeviceUniqueId = 1;
+    string ChannelUniqueId = 2;
+}
+
+// -------------------------------- BackendService
+
+message LoginReq{
+    string username = 1;
+    string password = 2;
+}
+
+message PermissionItem{
+    string method = 1;
+    string path = 2;
+}
+
+message PermissionResourceInitReq{
+    repeated PermissionItem list = 1;
+}
+
+message AdminPasswordReq{
+    string Password = 1;
+    string OldPassword = 2;
+}
+
+// 管理后台基础
+service BackendService{
+    // 后台登录
+    rpc Login (LoginReq) returns (Response);
+
+    // 获取所有权限相关
+    rpc AuthRes(EmptyRequest) returns (Response);
+
+    // 组织部门创建
+    rpc DepartmentCreate(MapReq) returns (Response);
+    // 组织部门删除
+    rpc DepartmentDelete(XRequestParams) returns (Response);
+    // 组织部门修改
+    rpc DepartmentUpdate(XRequestParams) returns (Response);
+    // 组织部门详情
+    rpc DepartmentRow(IDReq) returns (Response);
+    // 组织部门列表
+    rpc Departments(XRequestParams) returns (Response);
+    // 组织部门结构树
+    rpc DepartmentTrees(IdsReq) returns (Response);
+
+    // 角色创建
+    rpc RoleCreate(MapReq) returns (Response);
+    // 角色删除
+    rpc RoleDelete(XRequestParams) returns (Response);
+    // 角色修改
+    rpc RoleUpdate(XRequestParams) returns (Response);
+    // 角色详情
+    rpc RoleRow(IDReq) returns (Response);
+    // 角色列表
+    rpc Roles(XRequestParams) returns (Response);
+
+    // 管理员创建
+    rpc AdminCreate(MapReq) returns (Response);
+    // 管理员删除
+    rpc AdminDelete(XRequestParams) returns (Response);
+    // 管理员修改
+    rpc AdminUpdate(XRequestParams) returns (Response);
+    // 管理员详情
+    rpc AdminRow(IDReq) returns (Response);
+    // 管理员列表
+    rpc Admins(XRequestParams) returns (Response);
+    // 更新密码
+    rpc AdminPassword(AdminPasswordReq) returns (Response);
+    // 检查用户是否存在
+    rpc AdminCheckExists(XRequestParams) returns (Response);
+    // 初始化密码
+    rpc InitializeSetPassword(AdminPasswordReq) returns (Response);
+
+    // 操作日志创建
+    rpc SystemOperationLogCreate(MapReq) returns (Response);
+    // 操作日志列表
+    rpc SystemOperationLogs(XRequestParams) returns (Response);
+}
+
+// 配置中心
+service ConfigService{
+    // 获取uniqueId
+    rpc MaxId(TypeReq) returns (Response);
+
+    // 字典创建
+    rpc DictionaryCreate(MapReq) returns (Response);
+    // 字典删除
+    rpc DictionaryDelete(XRequestParams) returns (Response);
+    // 字典更新
+    rpc DictionaryUpdate(XRequestParams) returns (Response);
+    // 管理员详情
+    rpc DictionaryRow(IDReq) returns (Response);
+    // 字典列表
+    rpc Dictionaries(XRequestParams) returns (Response);
+    // 字典结构树
+    rpc DictionaryTrees(EmptyRequest) returns (Response);
+    // 字典检查uniqueId是否存在
+    rpc DictionaryCheckUniqueId(UniqueIdReq) returns (Response);
+
+    // 设置更新
+    rpc SettingUpdate(XRequestParams) returns (Response);
+    // 设置获取
+    rpc SettingRow(EmptyRequest) returns (Response);
+
+    // 任务创建
+    rpc CrontabCreate(MapReq) returns (Response);
+    // 任务删除
+    rpc CrontabDelete(XRequestParams) returns (Response);
+    // 任务更新
+    rpc CrontabUpdate(XRequestParams) returns (Response);
+    // 任务批量更新
+    rpc CrontabBulkUpdate(XRequestParams) returns (Response);
+    // 任务详情
+    rpc CrontabRow(XRequestParams) returns (Response);
+    // 任务列表
+    rpc CrontabList(XRequestParams) returns (Response);
+    // 所有数据
+    rpc Crontab(EmptyRequest) returns (Response);
+
+    // media server创建
+    rpc MsCreate(MapReq) returns (Response);
+    // media server删除
+    rpc MsDelete(XRequestParams) returns (Response);
+    // media server更新
+    rpc MsUpdate(XRequestParams) returns (Response);
+    // media server详情
+    rpc MsRow(IDReq) returns (Response);
+    // media server列表
+    rpc MsList(XRequestParams) returns (Response);
+    // media server option 列表
+    rpc MsOptions(EmptyRequest) returns (Response);
+
+    // 录像计划创建
+    rpc VideoProjectCreate(MapReq) returns (Response);
+    // 录像计划删除
+    rpc VideoProjectDelete(XRequestParams) returns (Response);
+    // 录像计划更新
+    rpc VideoProjectUpdate(XRequestParams) returns (Response);
+    // 录像计划详情
+    rpc VideoProjectRow(IDReq) returns (Response);
+    // 录像计划列表
+    rpc VideoProjectList(XRequestParams) returns (Response);
+}
+
+// 设备相关中心
+service DeviceService{
+    // 设备在线状态 type = 1 设备 2 通道
+    rpc OnlineState(XRequestParams) returns (Response);
+    // rtsp stream url 分组 accessProtocol
+    rpc RtspStreamGroups(IdsReq) returns (Response);
+
+    // 设备创建
+    rpc DeviceCreate(MapReq) returns (Response);
+    // 设备upsert
+    rpc DeviceUpsert(MapReq) returns (Response);
+    // 设备删除
+    rpc DeviceDelete(XRequestParams) returns (Response);
+    // 设备更新
+    rpc DeviceUpdate(XRequestParams) returns (Response);
+    // 设备详情
+    rpc DeviceRow(XRequestParams) returns (Response);
+    // 设备列表
+    rpc DeviceList(XRequestParams) returns (Response);
+
+    // 通道创建
+    rpc ChannelCreate(MapReq) returns (Response);
+    // 通道upsert
+    rpc ChannelUpsert(SliceMapReq) returns (Response);
+    // 通道upsert
+    rpc ChannelCascadeUpsert(SliceMapReq) returns (Response);
+    // 通道删除
+    rpc ChannelDelete(XRequestParams) returns (Response);
+    // 通道更新
+    rpc ChannelUpdate(XRequestParams) returns (Response);
+    // 通道详情
+    rpc ChannelRow(IDReq) returns (Response);
+    // 通道详情
+    rpc ChannelRowFind(XRequestParams) returns (Response);
+    // 通道列表
+    rpc ChannelList(XRequestParams) returns (Response);
+    // 通道数量
+    rpc ChannelTotal(XRequestParams) returns (Response);
+    // 通道列表
+    rpc ChannelXlist(XRequestParams) returns (Response);
+    // 获取通道媒体服务id
+    rpc MediaServersWithChannelIds(XRequestParams) returns (Response);
+    // 检测通道是否存在
+    rpc ChannelExists(XRequestParams) returns (Response);
+    // 删除通道(Devices.ChannelFilters)
+    rpc ChannelDeleteWithChannelFilters(UniqueIdsReq) returns (Response);
+
+    // 设备通道列表(通过通道id获取)
+    rpc DeviceChannelRelationsWithChannelIds(UniqueIdsReq) returns (Response);
+    // 设备通道信息
+    rpc DeviceChannel(DeviceChannelReq) returns (Response);
+    // 设备在线统计
+    rpc DeviceOnlineStatistics(EmptyRequest) returns (Response);
+
+    // 报警创建
+    rpc AlarmCreate(MapReq) returns (Response);
+    // 报警删除
+    rpc AlarmDelete(XRequestParams) returns (Response);
+    // 报警列表
+    rpc AlarmList(XRequestParams) returns (Response);
+}

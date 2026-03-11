@@ -1,0 +1,90 @@
+Mode: "${SKEYEVSS_SERVER_ENV_MODE}"
+ContainerizedState: ${SKEYEVSS_CONTAINERIZED_STATE}
+Name: "${SKEYEVSS_WEB_SEV_NAME}"
+PProfPort: ${SKEYEVSS_PPROF_WEB_PORT}
+PProfFileDir: "${SKEYEVSS_SAVE_PPROF_DIR}"
+Version: "${SKEYEVSS_VERSION}"
+# 内网ip
+InternalIP: "${SKEYEVSS_INTERNAL_IP}"
+# 外网ip
+ExternalIP: "${SKEYEVSS_EXTERNAL_IP}"
+
+Log:
+    KeepDays: 30
+    Compress: true
+    ServiceName: "${SKEYEVSS_WEB_SEV_NAME}"
+    Path: "${SKEYEVSS_SERVER_LOG_PATH}/${SKEYEVSS_WEB_SEV_NAME}"
+    Mode: "${SKEYEVSS_LOG_MODE}"
+    Encoding: "${SKEYEVSS_LOG_ENCODING}"
+    Level: "${SKEYEVSS_LOG_LEVEL}"
+
+# service base config
+SevBase:
+    UseMysql: ${SKEYEVSS_ENABLED_MYSQL}
+    UseRedis: ${SKEYEVSS_ENABLED_REDIS}
+    UseFfmpeg: ${SKEYEVSS_ENABLED_FFMPEG}
+    UseEtcd: ${SKEYEVSS_ENABLED_ETCD}
+    # mysql sqlite
+    DatabaseType: "${SKEYEVSS_DATABASE_TYPE}"
+
+    Root: "${SKEYEVSS_ROOT}"
+    MysqlUsername: "${SKEYEVSS_MYSQL_USERNAME}"
+    MysqlPassword: "${SKEYEVSS_MYSQL_PASSWORD}"
+    RedisPassword: "${SKEYEVSS_REDIS_PASSWORD}"
+
+    SevNameMysql: "${SKEYEVSS_MYSQL_NAME}"
+    SevNameRedis: "${SKEYEVSS_REDIS_NAME}"
+    SevNameEtcd: "${SKEYEVSS_ETCD_NAME}"
+    SevNameMediaServer: "${SKEYEVSS_MEDIA_SERVER_NAME}"
+    SevNameGuard: "${SKEYEVSS_GUARD_NAME}"
+    SevNameVss: "${SKEYEVSS_VSS_NAME}"
+    SevNameCron: "${SKEYEVSS_CRON_NAME}"
+    SevNameDB: "${SKEYEVSS_DB_GRPC_NAME}"
+    SevNameBackendApi: "${SKEYEVSS_BACKEND_API_NAME}"
+    SevNameWebSev: "${SKEYEVSS_WEB_SEV_NAME}"
+
+    MysqlPort: ${SKEYEVSS_MYSQL_PORT}
+    MysqlHost: ${SKEYEVSS_MYSQL_HOST}
+    RedisPort: ${SKEYEVSS_REDIS_PORT}
+    RedisHost: ${SKEYEVSS_REDIS_HOST}
+    EtcdPort: ${SKEYEVSS_ETCD_CLIENT_PORT}
+    WebSevPort: ${SKEYEVSS_WEB_SEV_PORT}
+    MediaServerPort: ${SKEYEVSS_MEDIA_SERVER_PORT}
+    VssPort: ${SKEYEVSS_VSS_PORT}
+    CronPort: ${SKEYEVSS_CRON_PORT}
+    GuardPort: ${SKEYEVSS_GUARD_PORT}
+    DBPort: ${SKEYEVSS_DB_GRPC_PORT}
+    BackendApiPort: ${SKEYEVSS_BACKEND_API_PORT}
+    MediaServerHttpsPort: ${SKEYEVSS_MEDIA_SERVER_HTTPS_PORT}
+    MediaServerRtspPort: ${SKEYEVSS_MEDIA_SERVER_RTSP_PORT}
+    MediaServerRtmpPort: ${SKEYEVSS_MEDIA_SERVER_RTMP_PORT}
+    MediaRtcIceHostNatToIps: "${SKEYEVSS_MEDIA_RTC_ICE_HOST_NAT_TO_IPS}"
+
+    EtcdHost: "${SKEYEVSS_ETCD_HOST}"
+
+    ProxyApiBase: "${SKEYEVSS_WEB_SEV_PROXY_API_BACKEND}"
+    ProxyApiExternal: "${SKEYEVSS_WEB_SEV_PROXY_API_EXTERNAL}"
+    ProxyFile: "${SKEYEVSS_WEB_SEV_PROXY_FILE}"
+    ProxyFileUrl: "${SKEYEVSS_WEB_SEV_PROXY_FILE_URL}"
+    ProxyApiExternalTarget: "${SKEYEVSS_WEB_SEV_PROXY_API_EXTERNAL_TARGET}"
+
+    MSNotifyOnPubStart: "${SKEYEVSS_MEDIA_SERVER_NOTIFY_ON_PUB_START}"
+    MSNotifyOnPubStop: "${SKEYEVSS_MEDIA_SERVER_NOTIFY_ON_PUB_STOP}"
+    MSNotifyOnPushStart: "${SKEYEVSS_MEDIA_SERVER_NOTIFY_ON_PUSH_START}"
+    MSNotifyOnPushStop: "${SKEYEVSS_MEDIA_SERVER_NOTIFY_ON_PUSH_STOP}"
+    MSNotifyOnRelayPullStart: "${SKEYEVSS_MEDIA_SERVER_NOTIFY_ON_RELAY_PULL_START}"
+    MSNotifyOnRelayPullStop: "${SKEYEVSS_MEDIA_SERVER_NOTIFY_ON_RELAY_PULL_STOP}"
+    MSNotifyOnRtmpConnect: "${SKEYEVSS_MEDIA_SERVER_NOTIFY_ON_RTMP_CONNECT}"
+    MSNotifyOnSubStart: "${SKEYEVSS_MEDIA_SERVER_NOTIFY_ON_SUB_START}"
+
+    SSL:
+        PublicKey: "${SKEYEVSS_SSL_CERT_PUBLIC_KEY}"
+        PrivateKey: "${SKEYEVSS_SSL_CERT_PRIVATE_KEY}"
+    
+    Keys:
+        MediaServer: "${SKEYEVSS_U_KEY_MEDIA_SERVER}"
+        Vss: "${SKEYEVSS_U_KEY_VSS}"
+        Cron: "${SKEYEVSS_U_KEY_CRON}"
+        DB: "${SKEYEVSS_U_KEY_DB}"
+        BackendApi: "${SKEYEVSS_U_KEY_BACKEND_API}"
+        WebSev: "${SKEYEVSS_U_KEY_WEB_SEV}"

@@ -1,0 +1,65 @@
+// @Title        stream-pub
+// @Description  main
+// @Create       yiyiyi 2025/7/8 10:09
+
+package queue
+
+import (
+	"fmt"
+	"time"
+
+	"skeyevss/core/app/sev/cron/internal/types"
+	"skeyevss/core/pkg/functions"
+	"skeyevss/core/repositories/models/devices"
+	"skeyevss/core/repositories/redis"
+)
+
+var _ types.QueueLogic = (*StreamKeepaliveLogic)(nil)
+
+type StreamKeepaliveLogic struct {
+	executing bool
+}
+
+func (l *StreamKeepaliveLogic) SetExecuting(v bool) {
+	l.executing = v
+}
+
+func (l *StreamKeepaliveLogic) Key() string {
+	return redis.QueueStreamPubListen
+}
+
+func (l *StreamKeepaliveLogic) Executing() bool {
+	return l.executing
+}
+
+func (l *StreamKeepaliveLogic) Limit() int {
+	return 2
+}
+
+func (l *StreamKeepaliveLogic) Timeout() time.Duration {
+	return 2 * time.Second
+}
+
+func (l *StreamKeepaliveLogic) DO(params *types.QueueLogicDOParams) error {
+	defer func() {
+		params.Recover("流媒体监听")
+	}()
+
+	var record []devices.CrontabItem
+	for _, item := range params.Data {
+		var data devices.CrontabItem
+		if err := functions.JSONUnmarshal(item, &data); err != nil {
+			functions.LogError(fmt.Sprintf("流媒体监听队列数据解析失败, input %s, need: %T", item, data))
+			continue
+		}
+
+		record = append(record, data)
+	}
+
+	params.SvcCtx.Data.StreamKeepalive.Add(
+		functions.ArrUniqueWithCall(record, func(item devices.CrontabItem) string {
+			return item.StreamName
+		})...,
+	)
+	return nil
+}

@@ -1,0 +1,200 @@
+Mode: "${SKEYEVSS_SERVER_ENV_MODE}"
+ContainerizedState: ${SKEYEVSS_CONTAINERIZED_STATE}
+Name: "${SKEYEVSS_VSS_NAME}"
+ProductName: "${SKEYEVSS_PRODUCT_NAME}"
+Port: ${SKEYEVSS_VSS_PORT}
+InternalIp: "${SKEYEVSS_INTERNAL_IP}"
+ExternalIp: "${SKEYEVSS_EXTERNAL_IP}"
+Host: "${SKEYEVSS_VSS_BIND_HOST}"
+Timeout: 30000
+MaxBytes: 83886080
+SaveVideoSnapshotDir: "${SKEYEVSS_SAVE_VIDEO_SNAPSHOT_DIR}"
+PProfPort: ${SKEYEVSS_PPROF_VSS_PORT}
+PProfFileDir: "${SKEYEVSS_SAVE_PPROF_DIR}"
+UseSipPrintLog: ${SKEYEVSS_PRINT_REQUEST_LOG}
+UseSipLogToFile: ${SKEYEVSS_PRINT_SAVE_SIP_LOG_FILE}
+SipLogPath: "${SKEYEVSS_SERVER_LOG_PATH}/${SKEYEVSS_VSS_NAME}/sip"
+Version: "${SKEYEVSS_VERSION}"
+Domain: "${SKEYEVSS_DOMAIN}"
+
+XAuth:
+    AesKey: "${SKEYEVSS_AES_KEY}"
+    JwtSecret: "${SKEYEVSS_U_KEY_JWT}"
+    BackendApiJwtSecret: "${SKEYEVSS_U_KEY_BACKEND_API}"
+    ConnType: "backend-api"
+    TokenType: 0
+    LoginExpire: 172800000
+
+StreamPlayProxyPath:
+    WS: "${SKEYEVSS_VSS_STREAM_PLAY_PROXY_WS}"
+    HTTP: "${SKEYEVSS_VSS_STREAM_PLAY_PROXY_HTTP}"
+
+SavePath:
+    Log: ""
+    Image: "${SKEYEVSS_ROOT}/tmp/images/"
+    File: "${SKEYEVSS_ROOT}/tmp/files/"
+    Pdf: "${SKEYEVSS_ROOT}/tmp/pdfs/"
+
+RpcInterceptor:
+    UseRpcCallerRetry: ${SKEYEVSS_USE_RPC_CALLER_RETRY}
+    RpcCallerRetryMax: ${SKEYEVSS_RPC_CALLER_RETRY_MAX}
+    RpcCallerRetryWaitInterval: ${SKEYEVSS_RPC_CALLER_RETRY_WAIT_INTERVAL}
+
+    UseRpcKeepalive: ${SKEYEVSS_USE_RPC_KEEPALIVE}
+    RpcKeepaliveTime: ${SKEYEVSS_RPC_KEEPALIVE_TIME}
+    RpcKeepaliveTimeout: ${SKEYEVSS_RPC_KEEPALIVE_TIMEOUT}
+    RpcKeepalivePermitWithoutStream: ${SKEYEVSS_RPC_KEEPALIVE_PERMIT_WITHOUT_STREAM}
+
+#DBGrpc:
+#    Timeout: 20000
+#    Endpoints:
+#        - "${SKEYEVSS_INTERNAL_IP}:${SKEYEVSS_DB_GRPC_PORT}"
+DBGrpc:
+    Timeout: 20000
+    Etcd:
+        Key: "${SKEYEVSS_DB_GRPC_NAME}"
+        Hosts:
+            - "${SKEYEVSS_ETCD_HOST}:${SKEYEVSS_ETCD_CLIENT_PORT}"
+
+Http:
+    Port: ${SKEYEVSS_VSS_HTTP_PORT}
+
+SSE:
+    Port: ${SKEYEVSS_VSS_SSE_PORT}
+
+WS:
+    Port: ${SKEYEVSS_VSS_WS_PORT}
+    MaxConn: ${SKEYEVSS_VSS_WS_MAX_CONN}
+    ReadBufferMaxSize: ${SKEYEVSS_VSS_WS_READ_BUFFER_MAX_SIZE}
+    WriteBufferMaxSize: ${SKEYEVSS_VSS_WS_WRITEBUFFER_MAX_SIZE}
+    WaitTimeOut: ${SKEYEVSS_VSS_WS_WAIT_TIME_OUT}
+    HeartbeatTimer: ${SKEYEVSS_VSS_WS_HEARTBEAT_TIMER}
+    ClearTalkSipInterval: ${SKEYEVSS_VSS_WS_CLEAR_TALK_SIP_INTERVAL}
+    MaxLifetime: 10
+    AuthorizationLifetime: 5
+    ReqTimeout: 10000
+
+Sip:
+    UseExternalIP: ${SKEYEVSS_VSS_USE_EXTERNAL_IP}
+    CascadeSipPort: ${SKEYEVSS_VSS_CASCADE_SIP_PORT}
+    # 服务监听的 tcp/udp 端口号
+    Port: ${SKEYEVSS_VSS_PORT}
+    # gb/t28181 20 位国标 ID
+    ID: '${SKEYEVSS_VSS_SIP_ID}'
+    # 域
+    Domain: '${SKEYEVSS_VSS_SIP_DOMAIN}'
+    # 注册密码
+    Password: '${SKEYEVSS_VSS_SIP_PASSWORD}'
+    # 是否使用密码校验
+    UsePassword: ${SKEYEVSS_VSS_SIP_USE_PASSWORD}
+    # 定时发送catalog请求
+    CatalogInterval: ${SKEYEVSS_VSS_SIP_CATALOG_INTERVAL}
+    # 设备在线心跳存活时间
+    HeartbeatTimeout: ${SKEYEVSS_VSS_SIP_LIFETIME_TIMEOUT_INTERVAL}
+    # 是否开启公网收流
+    UseExternalWan: ${SKEYEVSS_VSS_SIP_USE_EXTERNAL_WAN}
+    Expire: 3600
+    SendTimeout: ${SKEYEVSS_VSS_SIP_SEND_TIMEOUT_INTERVAL}
+    MediaReceiveStreamTimeout: ${SKEYEVSS_VSS_MEDIA_RECEIVE_TIMEOUT_INTERVAL}
+    MediaNoWatchingTimeout: ${SKEYEVSS_VSS_MEDIA_NO_WATCHING_TIMEOUT_INTERVAL}
+    MediaServerStreamPortMax: ${SKEYEVSS_VSS_MEDIA_SERVER_STREAM_PORT_MAX}
+    MediaServerStreamPortMin: ${SKEYEVSS_VSS_MEDIA_SERVER_STREAM_PORT_MIN}
+    MediaServerVssSameMachine: ${SKEYEVSS_VSS_SIP_MEDIA_SERVER_VSS_SAME_MACHINE}
+    UsableMinPort: ${SKEYEVSS_VSS_INVITE_USABLE_MIN_PORT}
+    UsableMaxPort: ${SKEYEVSS_VSS_INVITE_USABLE_MAX_PORT}
+
+Onvif:
+    MulticastIP: "${SKEYEVSS_VSS_ONVIF_MULTI_CAST_IP}"
+    WsDiscoveryPort: ${SKEYEVSS_VSS_ONVIF_WS_DISCOVERY_PORT}
+    DiscoveryTimeout: ${SKEYEVSS_VSS_ONVIF_DISCOVERY_TIMEOUT}
+
+Redis:
+    Host: "${SKEYEVSS_REDIS_HOST}:${SKEYEVSS_REDIS_PORT}"
+    Pass: "${SKEYEVSS_REDIS_PASSWORD}"
+    MaxIdle: 300
+    MaxActive: 600
+    IdleTimeout: 300
+
+FFMpeg:
+    Home: "${SKEYEVSS_FFMPEG_HOME}"
+    Port: ${SKEYEVSS_FFMPEG_PORT}
+    ContainerizedState: ${SKEYEVSS_CONTAINERIZED_STATE}
+
+Log:
+    KeepDays: 30
+    Compress: true
+    ServiceName: "${SKEYEVSS_VSS_NAME}"
+    Path: "${SKEYEVSS_SERVER_LOG_PATH}/${SKEYEVSS_VSS_NAME}"
+    Mode: "${SKEYEVSS_LOG_MODE}"
+    Encoding: "${SKEYEVSS_LOG_ENCODING}"
+    Level: "${SKEYEVSS_LOG_LEVEL}"
+
+SevBase:
+    UseMysql: ${SKEYEVSS_ENABLED_MYSQL}
+    UseRedis: ${SKEYEVSS_ENABLED_REDIS}
+    UseFfmpeg: ${SKEYEVSS_ENABLED_FFMPEG}
+    UseEtcd: ${SKEYEVSS_ENABLED_ETCD}
+    # mysql sqlite
+    DatabaseType: "${SKEYEVSS_DATABASE_TYPE}"
+
+    Root: "${SKEYEVSS_ROOT}"
+    MysqlUsername: "${SKEYEVSS_MYSQL_USERNAME}"
+    MysqlPassword: "${SKEYEVSS_MYSQL_PASSWORD}"
+    RedisPassword: "${SKEYEVSS_REDIS_PASSWORD}"
+
+    SevNameMysql: "${SKEYEVSS_MYSQL_NAME}"
+    SevNameRedis: "${SKEYEVSS_REDIS_NAME}"
+    SevNameEtcd: "${SKEYEVSS_ETCD_NAME}"
+    SevNameMediaServer: "${SKEYEVSS_MEDIA_SERVER_NAME}"
+    SevNameGuard: "${SKEYEVSS_GUARD_NAME}"
+    SevNameVss: "${SKEYEVSS_VSS_NAME}"
+    SevNameCron: "${SKEYEVSS_CRON_NAME}"
+    SevNameDB: "${SKEYEVSS_DB_GRPC_NAME}"
+    SevNameBackendApi: "${SKEYEVSS_BACKEND_API_NAME}"
+    SevNameWebSev: "${SKEYEVSS_WEB_SEV_NAME}"
+
+    MysqlPort: ${SKEYEVSS_MYSQL_PORT}
+    MysqlHost: ${SKEYEVSS_MYSQL_HOST}
+    RedisPort: ${SKEYEVSS_REDIS_PORT}
+    RedisHost: ${SKEYEVSS_REDIS_HOST}
+    EtcdPort: ${SKEYEVSS_ETCD_CLIENT_PORT}
+    WebSevPort: ${SKEYEVSS_WEB_SEV_PORT}
+    MediaServerPort: ${SKEYEVSS_MEDIA_SERVER_PORT}
+    VssPort: ${SKEYEVSS_VSS_PORT}
+    CronPort: ${SKEYEVSS_CRON_PORT}
+    GuardPort: ${SKEYEVSS_GUARD_PORT}
+    DBPort: ${SKEYEVSS_DB_GRPC_PORT}
+    BackendApiPort: ${SKEYEVSS_BACKEND_API_PORT}
+    MediaServerHttpsPort: ${SKEYEVSS_MEDIA_SERVER_HTTPS_PORT}
+    MediaServerRtspPort: ${SKEYEVSS_MEDIA_SERVER_RTSP_PORT}
+    MediaServerRtmpPort: ${SKEYEVSS_MEDIA_SERVER_RTMP_PORT}
+    MediaRtcIceHostNatToIps: "${SKEYEVSS_MEDIA_RTC_ICE_HOST_NAT_TO_IPS}"
+
+    EtcdHost: "${SKEYEVSS_ETCD_HOST}"
+
+    ProxyApiBase: "${SKEYEVSS_WEB_SEV_PROXY_API_BACKEND}"
+    ProxyApiExternal: "${SKEYEVSS_WEB_SEV_PROXY_API_EXTERNAL}"
+    ProxyFile: "${SKEYEVSS_WEB_SEV_PROXY_FILE}"
+    ProxyFileUrl: "${SKEYEVSS_WEB_SEV_PROXY_FILE_URL}"
+    ProxyApiExternalTarget: "${SKEYEVSS_WEB_SEV_PROXY_API_EXTERNAL_TARGET}"
+
+    MSNotifyOnPubStart: "${SKEYEVSS_MEDIA_SERVER_NOTIFY_ON_PUB_START}"
+    MSNotifyOnPubStop: "${SKEYEVSS_MEDIA_SERVER_NOTIFY_ON_PUB_STOP}"
+    MSNotifyOnPushStart: "${SKEYEVSS_MEDIA_SERVER_NOTIFY_ON_PUSH_START}"
+    MSNotifyOnPushStop: "${SKEYEVSS_MEDIA_SERVER_NOTIFY_ON_PUSH_STOP}"
+    MSNotifyOnRelayPullStart: "${SKEYEVSS_MEDIA_SERVER_NOTIFY_ON_RELAY_PULL_START}"
+    MSNotifyOnRelayPullStop: "${SKEYEVSS_MEDIA_SERVER_NOTIFY_ON_RELAY_PULL_STOP}"
+    MSNotifyOnRtmpConnect: "${SKEYEVSS_MEDIA_SERVER_NOTIFY_ON_RTMP_CONNECT}"
+    MSNotifyOnSubStart: "${SKEYEVSS_MEDIA_SERVER_NOTIFY_ON_SUB_START}"
+
+    SSL:
+        PublicKey: "${SKEYEVSS_SSL_CERT_PUBLIC_KEY}"
+        PrivateKey: "${SKEYEVSS_SSL_CERT_PRIVATE_KEY}"
+    
+    Keys:
+        MediaServer: "${SKEYEVSS_U_KEY_MEDIA_SERVER}"
+        Vss: "${SKEYEVSS_U_KEY_VSS}"
+        Cron: "${SKEYEVSS_U_KEY_CRON}"
+        DB: "${SKEYEVSS_U_KEY_DB}"
+        BackendApi: "${SKEYEVSS_U_KEY_BACKEND_API}"
+        WebSev: "${SKEYEVSS_U_KEY_WEB_SEV}"

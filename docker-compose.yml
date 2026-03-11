@@ -1,0 +1,295 @@
+version: '3.8'
+
+networks:
+  backend:
+    driver: ${SKEYEVSS_NETWORKS_DRIVER}
+
+services:
+  # 服务启动基础镜像
+  skeyevss_sev_base_builder:
+    profiles: ["conf", "builder"]
+    image: "${SKEYEVSS_HARBOR_DOMAIN}/${HARBOR_SKEYEVSS_PATH}/${SKEYEVSS_SEV_BASE_IMAGE}"
+    build:
+      context: .
+      dockerfile: ${SKEYEVSS_CODE_DIR}/docker/skeyevsssev/Dockerfile
+
+  # 服务依赖文件
+  dependent_files:
+    container_name: "${SKEYEVSS_SEV_DEPENDS_FILE_IMAGE}"
+    profiles: ["needed-update", "conf", "dependence"]
+    image: "${SKEYEVSS_HARBOR_DOMAIN}/${HARBOR_SKEYEVSS_PATH}/${SKEYEVSS_SEV_DEPENDS_FILE_IMAGE}"
+    build:
+      context: ${BUILD_TMP_DIR_ROOT}
+      dockerfile: ${SKEYEVSS_CODE_DIR}/docker/depends/Dockerfile
+      args:
+        SKEYEVSS_DB_GRPC_NAME: ${SKEYEVSS_DB_GRPC_NAME}
+        SKEYEVSS_VSS_NAME: ${SKEYEVSS_VSS_NAME}
+        SKEYEVSS_BACKEND_API_NAME: ${SKEYEVSS_BACKEND_API_NAME}
+        SKEYEVSS_CRON_NAME: ${SKEYEVSS_CRON_NAME}
+        SKEYEVSS_WEB_SEV_NAME: ${SKEYEVSS_WEB_SEV_NAME}
+        SKEYEVSS_MEDIA_SERVER_NAME: ${SKEYEVSS_MEDIA_SERVER_NAME}
+    networks:
+      - backend
+    restart: always
+
+  jaeger:
+    container_name: "${SKEYEVSS_JAEGER_NAME}"
+    profiles: ["needed-update", "conf", "core"]
+    image: "${SKEYEVSS_HARBOR_DOMAIN}/${HARBOR_SKEYEVSS_PATH}/${SKEYEVSS_SEV_JAEGER_IMAGE}"
+    build:
+      context: .
+      dockerfile: ${SKEYEVSS_CODE_DIR}/docker/jaeger/Dockerfile
+    ports:
+      - "${SKEYEVSS_JAEGER_UI_PORT}:16686"
+      - "${SKEYEVSS_JAEGER_COLLECTOR_API_PORT}:14268"
+      - "${SKEYEVSS_JAEGER_COLLECTOR_GRPC_PORT}:14250"
+      - "${SKEYEVSS_JAEGER_AGENT_UDP1_PORT}:6831/udp"
+      - "${SKEYEVSS_JAEGER_AGENT_UDP2_PORT}:6832/udp"
+      - "${SKEYEVSS_JAEGER_CONFIGS_PORT}:5778"
+      - "${SKEYEVSS_JAEGER_OTLP_GRPC_PORT}:4317"
+      - "${SKEYEVSS_JAEGER_OTLP_HTTP_PORT}:4318"
+    volumes:
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/data/jaeger/data:/badger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - backend
+    restart: always
+
+  mysql:
+    container_name: "${SKEYEVSS_MYSQL_NAME}"
+    profiles: ["needed-update", "conf", "core"]
+    image: "${SKEYEVSS_HARBOR_DOMAIN}/${HARBOR_SKEYEVSS_PATH}/${SKEYEVSS_SEV_MYSQL_IMAGE}"
+    build:
+      context: .
+      dockerfile: ${SKEYEVSS_CODE_DIR}/docker/mysql/Dockerfile
+    environment:
+      MYSQL_ROOT_PASSWORD: ${SKEYEVSS_MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${SKEYEVSS_MYSQL_DB_NAME_BASE}
+      # 普通用户
+      #MYSQL_USER: ${SKEYEVSS_MYSQL_USERNAME}
+      #MYSQL_PASSWORD: ${SKEYEVSS_MYSQL_PASSWORD}
+      TZ: Asia/Shanghai
+    ports:
+      - "${SKEYEVSS_MYSQL_PORT}:3306"
+    volumes:
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/data/mysql/data:/var/lib/mysql
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/data/mysql/conf/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/data/mysql/backup:/backup
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/data/mysql/init:/docker-entrypoint-initdb.d:ro
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+      - --default-authentication-plugin=mysql_native_password
+      - --max_connections=1000
+      - --innodb_buffer_pool_size=1G
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      timeout: 20s
+      retries: 10
+    restart: always
+
+  redis:
+    container_name: "${SKEYEVSS_REDIS_NAME}"
+    profiles: ["needed-update", "conf", "core"]
+    image: "${SKEYEVSS_HARBOR_DOMAIN}/${HARBOR_SKEYEVSS_PATH}/${SKEYEVSS_SEV_REDIS_IMAGE}"
+    build:
+      context: .
+      dockerfile: ${SKEYEVSS_CODE_DIR}/docker/redis/Dockerfile
+    environment:
+      - REDIS_PASSWORD=${SKEYEVSS_REDIS_PASSWORD}
+    ports:
+      - "${SKEYEVSS_REDIS_PORT}:6379"
+    command: sh -c 'redis-server --requirepass $${REDIS_PASSWORD} --appendonly yes'
+    volumes:
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/data/redis/data:/data
+    networks:
+      - backend
+    restart: always
+
+  etcd:
+    container_name: "${SKEYEVSS_ETCD_NAME}"
+    profiles: ["needed-update", "conf", "core"]
+    image: "${SKEYEVSS_HARBOR_DOMAIN}/${HARBOR_SKEYEVSS_PATH}/${SKEYEVSS_SEV_ETCD_IMAGE}"
+    build:
+      context: .
+      dockerfile: ${SKEYEVSS_CODE_DIR}/docker/etcd/Dockerfile
+    environment:
+      ALLOW_NONE_AUTHENTICATION: "yes"
+    volumes:
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/data/etcd/data:/bitnami/etcd
+    ports:
+      - "${SKEYEVSS_ETCD_CLIENT_PORT}:2379"
+      - "${SKEYEVSS_ETCD_PEER_PORT}:2380"
+    networks:
+      - backend
+    restart: always
+
+  webproxy:
+    profiles: ["conf", "core"]
+    image: "${SKEYEVSS_HARBOR_DOMAIN}/${HARBOR_SKEYEVSS_PATH}/${SKEYEVSS_SEV_BASE_IMAGE}"
+    container_name: "${SKEYEVSS_WEB_SEV_NAME}"
+    volumes:
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}:/app
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/source:/app/source
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/logs:/app/logs
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/tmp:/app/tmp
+    command: sh -c 'set -a; . /app/.env.prod.d; set +a; now=$$(date "+%Y.%m.%d"); exec /app/$$SKEYEVSS_WEB_SEV_NAME -env /app/.env.prod.d -web-static-dir /app/$$SKEYEVSS_BACKEND_BUILD_NAME -cert-pem $$SKEYEVSS_SSL_CERT_PUBLIC_KEY -cert-key $$SKEYEVSS_SSL_CERT_PRIVATE_KEY -f $$SKEYEVSS_WEB_SEV_CONF >> /app/logs/$$SKEYEVSS_WEB_SEV_NAME.$$now.log 2>&1'
+    working_dir: /app
+    privileged: true
+    #ports:
+    #  - "${SKEYEVSS_WEB_SEV_PORT}:${SKEYEVSS_WEB_SEV_PORT}"
+    #  - "${SKEYEVSS_PPROF_WEB_PORT}:${SKEYEVSS_PPROF_WEB_PORT}"
+    stdin_open: true
+    tty: true
+    # 使用宿主机网络
+    network_mode: host
+    #networks:
+    #  - backend
+    restart: always
+
+  skeyesms:
+    profiles: ["conf", "core"]
+    image: "${SKEYEVSS_HARBOR_DOMAIN}/${HARBOR_SKEYEVSS_PATH}/${SKEYEVSS_SEV_BASE_IMAGE}"
+    container_name: "${SKEYEVSS_MEDIA_SERVER_NAME}"
+    volumes:
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}:/app
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/source:/app/source
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/logs:/app/logs
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/tmp:/app/tmp
+    command: sh -c 'set -a; . /app/.env.prod.d; set +a; now=$$(date "+%Y.%m.%d"); exec /app/$$SKEYEVSS_MEDIA_SERVER_NAME -c $$SKEYEVSS_MEDIA_SERVER_CONF_DEF -p $$SKEYEVSS_MEDIA_SERVER_PORT >> /app/logs/$$SKEYEVSS_MEDIA_SERVER_NAME.$$now.log 2>&1'
+    working_dir: /app
+    privileged: true
+    #ports:
+    #  - "${SKEYEVSS_MEDIA_SERVER_PORT}:${SKEYEVSS_MEDIA_SERVER_PORT}"
+    #  - "${SKEYEVSS_MEDIA_SERVER_HTTPS_PORT}:${SKEYEVSS_MEDIA_SERVER_HTTPS_PORT}"
+    #  - "${SKEYEVSS_MEDIA_SERVER_RTSP_PORT}:${SKEYEVSS_MEDIA_SERVER_RTSP_PORT}"
+    #  - "${SKEYEVSS_MEDIA_SERVER_RTMP_PORT}:${SKEYEVSS_MEDIA_SERVER_RTMP_PORT}"
+    #  - "${SKEYEVSS_MEDIA_SERVER_RTC_PORT_MIN}-${SKEYEVSS_MEDIA_SERVER_RTC_PORT_MAX}:${SKEYEVSS_MEDIA_SERVER_RTC_PORT_MIN}-${SKEYEVSS_MEDIA_SERVER_RTC_PORT_MAX}"
+    #  - "30000-30500:30000-30500"
+    #  - "30000-30500:30000-30500/udp"
+    stdin_open: true
+    tty: true
+    #networks:
+    #  - backend
+    # 使用宿主机网络
+    network_mode: host
+    restart: always
+
+  dbrpc:
+    profiles: ["conf", "core"]
+    image: "${SKEYEVSS_HARBOR_DOMAIN}/${HARBOR_SKEYEVSS_PATH}/${SKEYEVSS_SEV_BASE_IMAGE}"
+    container_name: "${SKEYEVSS_DB_GRPC_NAME}"
+    volumes:
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}:/app
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/source:/app/source
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/logs:/app/logs
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/tmp:/app/tmp
+    command: sh -c 'set -a; . /app/.env.prod.d; set +a; now=$$(date "+%Y.%m.%d"); exec /app/$$SKEYEVSS_DB_GRPC_NAME -env /app/.env.prod.d -f $$SKEYEVSS_DB_GRPC_CONF >> /app/logs/$$SKEYEVSS_DB_GRPC_NAME.$$now.log 2>&1'
+    working_dir: /app
+    privileged: true
+    #ports:
+    #  - "${SKEYEVSS_DB_GRPC_PORT}:${SKEYEVSS_DB_GRPC_PORT}"
+    #  - "${SKEYEVSS_PPROF_DB_RPC_PORT}:${SKEYEVSS_PPROF_DB_RPC_PORT}"
+    depends_on:
+      - etcd
+      - mysql
+      - redis
+    stdin_open: true
+    tty: true
+    # 使用宿主机网络
+    network_mode: host
+    #networks:
+    #  - backend
+    restart: always
+
+  vss:
+    profiles: ["conf", "core"]
+    image: "${SKEYEVSS_HARBOR_DOMAIN}/${HARBOR_SKEYEVSS_PATH}/${SKEYEVSS_SEV_BASE_IMAGE}"
+    container_name: "${SKEYEVSS_VSS_NAME}"
+    volumes:
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}:/app
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/source:/app/source
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/logs:/app/logs
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/tmp:/app/tmp
+    command: sh -c 'set -a; . /app/.env.prod.d; set +a; now=$$(date "+%Y.%m.%d"); exec /app/$$SKEYEVSS_VSS_NAME -env /app/.env.prod.d -f $$SKEYEVSS_VSS_CONF >> /app/logs/$$SKEYEVSS_VSS_NAME.$$now.log 2>&1'
+    working_dir: /app
+    privileged: true
+    #ports:
+    #  - "${SKEYEVSS_VSS_PORT}:${SKEYEVSS_VSS_PORT}"
+    #  - "${SKEYEVSS_VSS_PORT}:${SKEYEVSS_VSS_PORT}/udp"
+    #  - "${SKEYEVSS_VSS_HTTP_PORT}:${SKEYEVSS_VSS_HTTP_PORT}"
+    #  - "${SKEYEVSS_VSS_SSE_PORT}:${SKEYEVSS_VSS_SSE_PORT}"
+    #  - "${SKEYEVSS_VSS_ONVIF_WS_DISCOVERY_PORT}:${SKEYEVSS_VSS_ONVIF_WS_DISCOVERY_PORT}"
+    #  - "${SKEYEVSS_VSS_CASCADE_SIP_PORT}:${SKEYEVSS_VSS_CASCADE_SIP_PORT}"
+    #  - "${SKEYEVSS_PPROF_VSS_PORT}:${SKEYEVSS_PPROF_VSS_PORT}"
+    #  - "${SKEYEVSS_VSS_WS_PORT}:${SKEYEVSS_VSS_WS_PORT}"
+    #  - "${SKEYEVSS_VSS_INVITE_USABLE_MIN_PORT}-${SKEYEVSS_VSS_INVITE_USABLE_MAX_PORT}:${SKEYEVSS_VSS_INVITE_USABLE_MIN_PORT}-${SKEYEVSS_VSS_INVITE_USABLE_MAX_PORT}"
+    depends_on:
+      - etcd
+      - dbrpc
+      - redis
+    stdin_open: true
+    tty: true
+    # 使用宿主机网络
+    network_mode: host
+    #networks:
+    #  - backend
+    restart: always
+
+  backendapi:
+    profiles: ["conf", "core"]
+    image: "${SKEYEVSS_HARBOR_DOMAIN}/${HARBOR_SKEYEVSS_PATH}/${SKEYEVSS_SEV_BASE_IMAGE}"
+    container_name: "${SKEYEVSS_BACKEND_API_NAME}"
+    volumes:
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}:/app
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/source:/app/source
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/logs:/app/logs
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/tmp:/app/tmp
+    command: sh -c 'set -a; . /app/.env.prod.d; set +a; now=$$(date "+%Y.%m.%d"); rm -rf ~/.ssh/id_rsa; mkdir -p ~/.ssh; ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N '' -q; chmod 600 ~/.ssh/id_rsa; mkdir -p /app/tmp; cat ~/.ssh/id_rsa.pub > /app/tmp/container_pubkey; exec /app/$$SKEYEVSS_BACKEND_API_NAME -env /app/.env.prod.d -f $$SKEYEVSS_BACKEND_API_CONF >> /app/logs/$$SKEYEVSS_BACKEND_API_NAME.$$now.log 2>&1'
+    working_dir: /app
+    privileged: true
+    #ports:
+    #  - "${SKEYEVSS_BACKEND_API_PORT}:${SKEYEVSS_BACKEND_API_PORT}"
+    #  - "${SKEYEVSS_PPROF_BACKEND_API_PORT}:${SKEYEVSS_PPROF_BACKEND_API_PORT}"
+    depends_on:
+      - etcd
+      - redis
+      - dbrpc
+      - vss
+    stdin_open: true
+    tty: true
+    # 使用宿主机网络
+    network_mode: host
+    #networks:
+    #  - backend
+    restart: always
+
+  cron:
+    profiles: ["conf", "core"]
+    image: "${SKEYEVSS_HARBOR_DOMAIN}/${HARBOR_SKEYEVSS_PATH}/${SKEYEVSS_SEV_BASE_IMAGE}"
+    container_name: "${SKEYEVSS_CRON_NAME}"
+    volumes:
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}:/app
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/source:/app/source
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/logs:/app/logs
+      - ${SKEYEVSS_SEV_VOLUMES_DIR}/tmp:/app/tmp
+    command: sh -c 'set -a; . /app/.env.prod.d; set +a; now=$$(date "+%Y.%m.%d"); exec /app/$$SKEYEVSS_CRON_NAME -env /app/.env.prod.d -f $$SKEYEVSS_CRON_CONF >> /app/logs/$$SKEYEVSS_CRON_NAME.$$now.log 2>&1'
+    working_dir: /app
+    privileged: true
+    #ports:
+    #  - "${SKEYEVSS_CRON_PORT}:${SKEYEVSS_CRON_PORT}"
+    #  - "${SKEYEVSS_PPROF_CRON_PORT}:${SKEYEVSS_PPROF_CRON_PORT}"
+    depends_on:
+      - etcd
+      - redis
+      - dbrpc
+    stdin_open: true
+    tty: true
+    # 使用宿主机网络
+    network_mode: host
+    #networks:
+    #  - backend
+    restart: always

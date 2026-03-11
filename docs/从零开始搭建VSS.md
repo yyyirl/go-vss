@@ -1,0 +1,360 @@
+# VSS搭建
+
+这篇文章不是“GB28181 协议科普”，而是一篇**工程落地**文章。<br>
+    如果你要从零搭建一个 VSS（Video Security System）服务，
+    支持国标设备接入、目录/心跳/Invite/Bye 等信令交互，并能与媒体服务联动完成收流/拉流，
+    那么“骨架”应该怎么搭、为什么这么搭、哪些点最容易踩坑。
+
+本文Skeyevss项目 `core/app/sev/vss` 的实现作为参考（但会抽象成可复用的方法论），重点讲解：
+
+- **Channel（Go channel）如何设计为信令总线**
+- **ServiceContext 怎么成为“全局依赖注入容器 + 并发状态仓库”**
+- **SIP 信令收发链路如何分层：Handler → Parser → Logic → Respond**
+  <br>
+---
+
+## 一、订立目标：一个最小可运行的VSS长什么样
+
+从工程角度，一个“最小可运行”的 VSS，我建议先满足这 4 件事：
+
+- **能监听 SIP（TCP/UDP）并稳定响应**：至少 REGISTER / MESSAGE(Keepalive)。
+- **能维护在线状态**：能从 REGISTER/Keepalive 推断设备在线、超时离线。
+- **能发起播放链路**：对外暴露 HTTP API，触发 Invite → Ack → 媒体联动。
+- **能被运营/排障**：日志（SIP 收发）、可观测（pprof）、错误隔离（recover + 重试/节流）。
+
+在本项目中，`main.go` 就是这个“骨架启动器”：先加载 env+yaml、创建 `ServiceContext`、启动 SIP/SSE/WS/HTTP，再启动一组后台
+`SipProcLogic` 作为工作协程。
+
+下面这段代码可以当做 VSS 的**标准启动模板**：
+
+```main.go
+func main() {
+	// ... load env + config ...
+	var (
+		stop   = make(chan os.Signal, 1)
+		svcCtx = svc.NewServiceContext(c)
+	)
+	// 初始化
+	initialize.DO(svcCtx, &baseConf)
+
+	// SIP 服务器（GBS TCP/UDP + GBC TCP/UDP）
+	{ /* listen ... */ }
+
+	// SSE / WS / HTTP
+	go server.NewSSESev(svcCtx).Start()
+	go server.NewWSSev(svcCtx).Start()
+	go server.NewHttpSev(svcCtx).Start()
+
+	// 后台任务链（FetchData + Send + Loop + Log + Cascade...）
+	svcCtx.InitFetchDataState.Add(2)
+	server.NewSipProc(svcCtx).DO(
+		new(proc.FetchDataLogic),
+		new(gbs_proc.SendLogic),
+		new(gbs_proc.CatalogLoopLogic),
+		new(gbs_proc.HeartbeatOfflineLogic),
+		new(gbs_proc.SetDeviceOnlineStateLogic),
+		new(gbs_proc.CheckDeviceOnlineStateLogic),
+		new(gbs_proc.SipLogLogic),
+		new(gbc_proc.CascadeLoopLogic),
+		new(gbc_proc.SendLoopLogic),
+	)
+
+	<-stop
+	// shutdown sip servers...
+}
+```
+
+你会注意到一个很关键的设计点：
+
+- **SIP Listen 是“入口”**（设备推过来的请求）
+- **SipProc 是“内核”**（异步工作流）
+- **HTTP 是“控制面”**（给前端/Backend API 提供触发能力）
+
+而把它们粘合起来的，就是 `ServiceContext` + 大量channel。
+
+---
+
+## 二、ServiceContext：把 VSS 做成“可并发运行的系统”，而不是一堆函数
+
+### 2.1 你需要一个“上下文容器”
+
+多数项目的 `ServiceContext` 只放配置和 client。但在 VSS 这类“协议型服务”里，**它还必须承载并发状态与任务队列**。原因很简单：
+
+- 信令是事件流（REGISTER/MESSAGE/INVITE/ACK/BYE…），它天然异步且并发
+- 你需要把“收包”和“处理/发送”解耦，才能避免阻塞 SIP 线程
+- 你需要有可共享的状态：序列号、ACK 关联、Invite 进行中、流存在状态、心跳定时器等
+
+本项目的 `ServiceContext`：既有 RPC client/Redis，也有 WS/SIP 相关 channel、并发 map/set、状态缓存等：
+
+```vss/internal/types/types.go
+type (
+	ServiceContext struct {
+		Config      config.Config
+		RpcClients  *client.GRPCClients
+		RedisClient *redis.Client
+		// ...
+		SipSendVideoLiveInvite   chan *SipVideoLiveInviteMessage // 发送invite 视频播放
+		SipSendBye               chan *SipByeMessage             // 发送bye
+		// ...
+		SipCatalogLoopMap   *xmap.XMap[string, *SipCatalogLoopReq]
+		SipHeartbeatLoopMap *xmap.XMap[string, *SipHeartbeatLoopReq]
+		AckRequestMap       *xmap.XMap[string, *SendSipRequest]
+		PubStreamExistsState *set.CSet[string]
+		InitFetchDataState  sync.WaitGroup
+		// ...
+	}
+)
+```
+
+### 2.2 ServiceContext 的初始化：把“依赖”和“通道”一次性建好
+
+本项目在 `svc.NewServiceContext` 中把 RPC、Redis、Broadcast、WSProc、以及所有 SIP 发送 channel 都建好并返回：
+
+```vss/internal/svc/service_context.go
+func NewServiceContext(c config.Config) *types.ServiceContext {
+	// ... build rpc client options ...
+	return &types.ServiceContext{
+		Config: c,
+		RpcClients: &client.GRPCClients{ /* ... */ },
+		RedisClient: redis.New(...),
+		Broadcast:   broadcast.NewBroadcast(100),
+		WSProc: &types.WSProc{ /* ... */ },
+		SipSendCatalog:         make(chan *types.Request, 100),
+		SipSendVideoLiveInvite: make(chan *types.SipVideoLiveInviteMessage, 100),
+		SipSendBye:             make(chan *types.SipByeMessage, 100),
+		// ... and many others ...
+	}
+}
+```
+
+这段代码的精神是：**所有并发组件都由 ServiceContext 承载，并在启动时初始化完成**。这样做的收益是：
+
+- 任何逻辑（HTTP/SIP/定时器/WS）只需要依赖 `svcCtx`，不用到处 new client
+- 对外部资源（RPC/Redis）的配置集中、可替换（便于单测时注入 mock）
+- 对内部并发结构（channel/map/set）集中、可观测（排障更容易）
+
+---
+
+## 三、Channel 设计：让信令系统“可扩展、可降压、可恢复”
+
+VSS 的核心不是“写几个 handler”，而是“设计一个不会被突发流量打爆的事件系统”。Go channel 在这里非常合适。
+
+我建议把 channel 分成三类，每类的职责不同。
+
+### 3.1 命令通道（Command Channels）
+
+命令通道的含义是：想让VSS做某件事，但不要求立刻同步完成。比如“发 Catalog”、“发 Invite”、“发 Bye”、“发 PTZ 控制”。
+
+在本项目中，这些都放在 `ServiceContext`，并由 `SendLogic` 统一消费并执行真正的 SIP 发送。
+
+例如 `SendLogic` 的主循环就是一个“信令发送总线”：
+
+```vss/internal/logic/gbs_proc/send_sip_proc.go
+func (l *SendLogic) DO(params *types.DOProcLogicParams) {
+	l.svcCtx.InitFetchDataState.Wait()
+	for {
+		select {
+		case v := <-l.svcCtx.SipSendCatalog:
+			go func(v *types.Request) { _ = l.catalog(v) }(v)
+		case v := <-l.svcCtx.SipSendVideoLiveInvite:
+			go func(v *types.SipVideoLiveInviteMessage) { _ = l.VideoLiveInvite(v) }(v)
+		case v := <-l.svcCtx.SipSendBye:
+			go func(v *types.SipByeMessage) { _ = l.bye(v) }(v)
+		}
+	}
+}
+```
+
+为什么一定要“统一消费、统一发送”？因为你最终需要：
+
+- **节流**：同一设备/同一通道不要短时间重复 invite/catalog
+- **限速**：发送端要控制并发，**不然设备端/NVR被打爆**，导致设备无法工作
+- **重试策略**：某些错误可以重试，某些错误要立即失败并标记状态
+- **日志记录**：确保每一个请求都能被观测
+
+把发送集中到一个“发送总线”，你才有统一施策的入口。
+
+### 3.2 定时器通道（Loop/Timer Channels）
+
+你会发现 ServiceContext 里还有 `SipCatalogLoop`、`SipHeartbeatLoop` 等通道：这些不是立即发送命令，而是**用来创建/更新定时器状态
+**。
+
+模式是：**用“map + ticker”管理周期任务，用“命令通道”触发执行**：
+
+- 上线/注册事件：更新 map（注册任务）
+- 下线事件：从 map 删除（停止任务）
+- ticker：遍历 map，将要执行的任务写回命令通道（交给 SendLogic）
+
+这个模式能保证 “周期调度” 和 “发送执行” 解耦，排障也更容易。
+
+### 3.3 事件通道（Event/Log/Broadcast Channels）
+
+日志、SIP 报文、WS 广播等属于事件流。它们不应该阻塞业务链路。
+
+项目中 `SipLog chan *SipLogItem`：任何 SIP 收包/发包都会写入该通道，日志协程异步落盘/广播。
+
+---
+
+## 四、信令交互：收包、解析、分发、响应（以及如何把它写“稳”）
+
+### 4.1 最好做到“统一 SIP 入口”
+
+如果每个 SIP handler 都单独写：解析、日志、超时、响应… 最后你会得到一堆难以一致治理的代码。<br>
+更好的方式是：**所有 SIP 请求都走同一条骨架流程**：
+
+1. 解析成内部 `types.Request`（抽取设备 ID、URI、body、transport、source…）
+2. 写入 SIP 收包日志通道
+3. 读取设置/黑名单等 guard 条件
+4. 包一层 context timeout
+5. 调用业务逻辑（Logic）
+6. 根据返回结果统一 respond（200/401/403/400…），并可选打印/落盘响应报文
+
+本项目用泛型做了统一入口：`sip.DO("GBS", svcCtx, req, tx, data, logic)`。<br>GBS 路由注册示例：
+
+```vss/internal/handler/gbs_sip/routers.go
+func RegisterHandlers(svcCtx *types.ServiceContext) types.HType {
+	return types.HType{
+		sip.REGISTER: func(req sip.Request, tx sip.ServerTransaction) {
+			sip2.DO("GBS", svcCtx, req, tx, nil, new(gbssip.RegisterLogic))
+		},
+		// ...
+	}
+}
+```
+
+`sip.DO` 的骨架逻辑: 统一 parse、写 SipLog、timeout、统一 respond<br>
+
+```vss/internal/pkg/sip/sip_handler.go
+func DO[T types.SipReceiveHandleLogic[T]](Type string, svcCtx *types.ServiceContext, req sip.Request, tx sip.ServerTransaction, data *types.MessageReceiveBase, logic T) {
+	var h = &handler[T]{svcCtx: svcCtx, req: req, tx: tx, logic: logic, data: data, sType: Type}
+	h.run()
+}
+
+func (h handler[T]) run() {
+	data, err := ParseToRequest(h.req)
+	// 解析失败 -> 400
+	// 写入 SipLog
+	// ban-ip guard
+	// ctx timeout
+	// logic.New(...).DO()
+	// 按返回码统一响应：401/403/400/200
+}
+```
+
+统一入口带来的收益非常直接：
+
+- **可控**：任何 SIP 请求都一定有超时、一定会日志化、一定会统一响应
+- **可扩展**：新增一个 SIP 命令类型，只需新增 Logic 并在路由里注册上去
+- **可治理**：黑名单、鉴权、节流、压测开关，都能在“统一入口”做一处改动
+
+### 4.2 MESSAGE 的分发策略：CmdType 决定业务逻辑
+
+GB28181 的很多业务都使用 MESSAGE（Keepalive/Catalog/DeviceInfo/Alarm…）。推荐策略是：
+
+- 先把 MESSAGE body parse 成一个“最小公共结构”（至少包含 `CmdType`）
+- 按 `CmdType` switch 到不同 logic
+
+本项目是这样做的：
+
+```vss/internal/handler/gbs_sip/routers.go
+sip.MESSAGE: func(req sip.Request, tx sip.ServerTransaction) {
+	data, err := sip2.NewParser[types.MessageReceiveBase]().ToData(req)
+	switch strings.ToLower(data.GetCmdType()) {
+	case strings.ToLower(types.MessageCMDTypeKeepalive):
+		sip2.DO("GBS", svcCtx, req, tx, data, new(gbssip.KeepaliveLogic))
+	case strings.ToLower(types.MessageCMDTypeCatalog):
+		sip2.DO("GBS", svcCtx, req, tx, data, new(gbssip.CatLogLogic))
+	// ...
+	}
+}
+```
+
+### 4.3 信令状态：AckRequestMap / PubStreamExistsState
+
+做到 INVITE/ACK/BYE 时，你会遇到：SIP 会话的关联字段（Call-ID、From/To
+tag、CSeq、SessionID）会跨多个步骤出现，并且会跨多个协程/事件流出现。<br>
+因此你必须有一个“会话状态仓库”。本项目用了并发 map/set（如 `AckRequestMap`、`PubStreamExistsState`）。在搭建时你可以理解为：这是你
+VSS 的“轻量状态机”。<br>
+
+---
+
+## 五、Channel业务概念：把协议落地到系统
+
+到目前为止，以上我讲解的是 Go channel（并发通信）。但 VSS 还必须理解 “Channel” 这个业务概念：**设备上的视频通道**。<br>
+本项目里有 `SipChannel` 结构体承接 Catalog XML 的通道信息：
+
+```vss/internal/types/types.go
+type (
+	SipChannel struct {
+		ChannelID string `xml:"DeviceID" json:"channelid"`
+		Name      string `xml:"Name" json:"name"`
+		Manufacturer string `xml:"Manufacturer" json:"manufacturer"`
+		Model        string `xml:"Model" json:"model"`
+		CivilCode    string `xml:"CivilCode" json:"civilcode"`
+		Address      string `xml:"Address" json:"address"`
+		Parental int `xml:"Parental" json:"parental"`
+		ParentId string `xml:"ParentID" json:"parentID"`
+		Status string `xml:"Status" json:"status"`
+	}
+)
+```
+
+建议把 Channel 建模拆成两层：
+
+- **协议层 Channel**：来自 Catalog XML 的字段 GB28181 原始结构
+- **系统层 Channel**：在系统里的通道表（uniqueId、deviceUniqueId、online、streamState、msId…），便于查询与控制
+
+两层之间做显式转换，不要让业务逻辑直接依赖 XML 结构。这样后期增加只需要写“协议层 → 系统层”的转换器，不用改全局业务逻辑。
+
+---
+
+## 六、从“跑起来”到“能用”：一定会踩的坑、以及如何提前设计
+
+### 6.1 收包 handler
+
+SIP handler 是入口，任何阻塞都意味丢包率上升、请求超时。
+<br>因此建议：handler 只做 parse + 校验 + 投递任务，繁复的任务交给 SipProc 异步执行（通过 channel）。
+<br>`sip.DO` 负责统一 parse/timeout/respond，发送与周期任务都在`SendLogic` 等 proc 中完成。
+
+### 6.2 给每类动作加节流/限制并发
+
+像 Catalog/Invite 这种动作，“发多了会把设备打死搞奔溃”。建议在发送总线层（SendLogic）做统一节流/限并发，需要覆盖：设备、通道、流。
+
+### 6.3 INVITE 流程一定要有状态机与清理逻辑
+
+INVITE → 200 → ACK → 收流 → 停流，这条链路任何一步失败，都要有反向清理：释放媒体会话、清理 map/set 状态、必要时发 BYE。<br>
+否则很容易出现“僵尸流”。
+
+### 6.4 可观测
+
+协议型服务排障必须依赖“报文日志”。在搭建时就做到：
+
+- SIP 请求/响应都有可追踪字段（Call-ID）
+- Invite 等链路有 step 日志（前端查看排错）
+- 启用 pprof
+
+---
+
+## 七、搭建路线图
+
+如果你要从零做一套类似 VSS 的服务，建议按这几步推进，每一步都能形成可运行的稳健程序：
+
+1. **启动骨架**：env+yaml、日志、pprof、SIP Listen TCP/UDP，返回 200 OK
+2. **统一入口**：做一个类似 `sip.DO` 的通用 handler pipeline（parse/timeout/respond/log）
+3. **ServiceContext & Channel 总线**：把发送动作抽成 channel，并写一个 SendProc 统一消费
+4. **设备在线状态**：REGISTER/Keepalive → HeartbeatLoopMap → 超时离线
+5. **Invite 播放链路**：HTTP API 触发 Invite，完成 INVITE/ACK 与媒体服务联动
+6. **功能拓展**：节流、状态清理、SIP 报文日志、SSE/WS、级联、订阅、录像回放
+
+---
+
+## 八、结语
+
+VSS这种服务的难点不只是能运行的信令服务器，而是要把它做成一个**高并发**、**方便拓展**、**低延迟**、**易于观测**的可靠系统。
+
+- `ServiceContext` 负责把系统拼接起来（依赖 + channel + 状态容器）
+- Go `channel` 负责“让系统跑起来”（解耦入口与工作协程，提供治理入口）
+- 统一的 SIP handler
+- pipeline 负责让系统稳健起来（可观测、可控、可扩展）
+
+做好这三件事，再往里加细节、厂商兼容、级联、对讲、回放，都会变的非常简单，而不是越改越乱。

@@ -1,0 +1,115 @@
+syntax = "v1"
+
+info(
+	title: "common"
+	author: "yirl"
+	email: "1003275805@qq.com"
+	version: "1.0"
+)
+
+type (
+	LoginReq {
+		Username string `json:"username"`
+		Password string `json:"password"`
+		Remember bool `json:"remember,optional"`
+	}
+
+	CodeReq {
+		code string `json:"code"`
+	}
+
+	UniqueIdQuery {
+		UniqueId string `path:"uniqueId"`
+	}
+
+	IdQuery {
+		Id uint `path:"id"`
+	}
+
+	PathQuery {
+		Path string `path:"path"`
+	}
+
+	NumQuery {
+		Num uint `path:"num"`
+	}
+
+	TypeQuery {
+		Type uint `path:"type"`
+	}
+
+	FileNameQuery {
+		FileName string `path:"fileName"`
+		Page int `path:"page"`
+		PageSize int `path:"pageSize"`
+	}
+
+	UploadFileReq{
+	}
+)
+
+// ---------------------------------------- request
+type (
+	UpdateItem {
+		Column string `json:"column"`
+		Value interface{} `json:"value"`
+	}
+
+		// 批量更新主键值
+	BulkUpdateInner {
+		PK interface{} `json:"pk"`        // 主键值
+		Val interface{} `json:"val"`      // 更新内容
+		Type int64 `json:"type,optional"` // 更新方式 0 ?占位符 1 原始数据
+	}
+
+
+	OrderItem {
+		Column string `json:"column"`
+		Value string `json:"value,default=desc,optional,options=[desc,asc]"` // desc asc
+	}
+
+	ConditionOriginalItem {
+		Query string
+		Values []interface{}
+	}
+
+	ConditionItem {
+		Column string `json:"column"`
+		Value interface{} `json:"value"`
+		Values []interface{} `json:"values"`
+		Operator string `json:"operator"`
+		UseNil bool `json:"-"`
+
+		// 原始条件
+		Original *ConditionOriginalItem `json:"-"`
+
+		// 与兄弟条件关系
+		LogicalOperator string `json:"logicalOperator"`
+		Inner []*ConditionItem `json:"inner"`
+
+		Columns []string `json:"-"`
+	}
+
+
+	// 需要同步更新orm.ReqParams
+	TRFParams {
+		Columns []string `json:"columns,optional"`
+		Orders []*OrderItem `json:"orders,optional"`
+		Conditions []*ConditionItem `json:"conditions,optional"`
+		UniqueIds []string `json:"uniqueIds,optional"`
+		Limit int `json:"limit,optional"`
+		Page int `json:"page,optional"`
+		Keyword string `json:"keyword,optional"`
+		UniqueId string `json:"uniqueId,optional"`
+		All bool `json:"all,optional"`
+		Type int64 `json:"type,optional"`
+		IgnoreNotFound bool `json:"ignoreNotFound,optional"`
+
+		Data []*UpdateItem `json:"data,optional"`
+		Backend bool `json:"backend,optional"`
+	}
+
+	RecordReq {
+		Record map[string]interface{} `json:"record,optional"`
+	}
+)

@@ -1,0 +1,645 @@
+syntax = "v1"
+
+info (
+	title:   "backend api"
+	author:  "yirl"
+	email:   "1003275805@qq.com"
+	version: "1.0"
+)
+
+import "common.api"
+
+// 登录
+@server (
+	group:      login
+	middleware: BaseMiddleware
+)
+service backend-api {
+	@doc "用户名登录"
+	@handler Login
+	post /login (LoginReq)
+}
+
+type ActivateCodeReq {
+	Code string `json:"code"`
+}
+
+type ServerUpdateReq {
+	Path string `json:"path"`
+}
+
+type RespQueryReq {
+	Code string `json:"code"`
+}
+
+type GenUniqueIdReq {
+	Type  string `json:"type"`
+	Count int    `json:"count"`
+}
+
+// 用户
+@server (
+	group:      user
+	middleware: AuthMiddleware
+)
+service backend-api {
+	@doc "用户信息"
+	@handler Info
+	get /user/info
+}
+
+// sys
+@server (
+	group:      system/server
+	middleware: AuthMiddleware
+)
+service backend-api {
+	@doc "健康检查"
+	@handler Health
+	get /server-health
+
+	@doc "系统信息"
+	@handler SystemInfo
+	get /system-info
+
+	@doc "重启服务"
+	@handler ServerRestart
+	get /system-restart
+
+	@doc "性能分析"
+	@handler PProfAnalyze
+	post /pprof-analyze
+
+	@doc "响应查询"
+	@handler RespQuery
+	post /resp-query (RespQueryReq)
+
+	@doc "获取uniqueId"
+	@handler GenUniqueId
+	post /gen-uniqueId (GenUniqueIdReq)
+}
+
+// setting
+@server (
+	group:      config/setting
+	middleware: AuthMiddleware
+)
+service backend-api {
+	@doc "系统设置"
+	@handler Setting
+	get /setting
+
+	@doc "更新"
+	@handler Update
+	put /setting (TRFParams)
+}
+
+// setting
+@server (
+	group:      config/setting
+	middleware: BaseMiddleware
+)
+service backend-api {
+	@doc "系统设置"
+	@handler Conf
+	get /conf
+}
+
+// 组织部门管理
+@server (
+	group:      system/departments
+	middleware: AuthMiddleware
+)
+service backend-api {
+	@doc "创建"
+	@handler Create
+	post /departments (RecordReq)
+
+	@doc "更新"
+	@handler Update
+	put /department (TRFParams)
+
+	@doc "列表"
+	@handler List
+	post /department/list (TRFParams)
+
+	@doc "详情"
+	@handler Row
+	get /department/:id (IdQuery)
+
+	@doc "删除"
+	@handler Delete
+	delete /departments (TRFParams)
+
+	@doc "结构树"
+	@handler Trees
+	get /department/trees
+}
+
+// 角色管理
+@server (
+	group:      system/roles
+	middleware: AuthMiddleware
+)
+service backend-api {
+	@doc "创建角色"
+	@handler Create
+	post /roles (RecordReq)
+
+	@doc "更新角色"
+	@handler Update
+	put /role (TRFParams)
+
+	@doc "角色列表"
+	@handler List
+	post /role/list (TRFParams)
+
+	@doc "角色详情"
+	@handler Row
+	get /role/:id (IdQuery)
+
+	@doc "删除"
+	@handler Delete
+	delete /roles (TRFParams)
+}
+
+type SetPasswordReq {
+	OldPassword string `json:"oldPassword"`
+	Password    string `json:"password"`
+}
+
+type InitializeSetPasswordReq {
+	Password string `json:"password"`
+}
+
+// 管理员
+@server (
+	group:      system/admins
+	middleware: AuthMiddleware
+)
+service backend-api {
+	@doc "创建管理员"
+	@handler Create
+	post /admins (RecordReq)
+
+	@doc "更新管理员"
+	@handler Update
+	put /admin (TRFParams)
+
+	@doc "管理员列表"
+	@handler List
+	post /admin/list (TRFParams)
+
+	@doc "管理员详情"
+	@handler Row
+	get /admin/:id (IdQuery)
+
+	@doc "删除"
+	@handler Delete
+	delete /admins (TRFParams)
+
+	@doc "检查用户是否存在"
+	@handler Exists
+	post /admin/exists (TRFParams)
+
+	@doc "更新密码"
+	@handler SetPassword
+	put /password (SetPasswordReq)
+
+	@doc "更新初始密码"
+	@handler InitializeSetPassword
+	put /initialize-password (InitializeSetPasswordReq)
+}
+
+// 日志
+@server (
+	group:      logs
+	middleware: AuthMiddleware
+)
+service backend-api {
+	@doc "操作日志列表"
+	@handler systemOperationLogs
+	post /system-operation-logs (TRFParams)
+
+	@doc "运行日志"
+	@handler runLogs
+	get /run-logs
+
+	@doc "查看日志"
+	@handler catLog
+	get /run-logs/:page/:pageSize/:fileName (FileNameQuery)
+
+	@doc "sip日志"
+	@handler sipLog
+	get /sip-logs/:page/:pageSize/:fileName (FileNameQuery)
+}
+
+type (
+	Base64FileUploadReq {
+		Stream string `json:"stream"`
+	}
+)
+
+@server (
+	prefix:     /tool
+	group:      tool
+	middleware: BaseMiddleware
+)
+service backend-api {
+	@doc "文件上传"
+	@handler uploadFile
+	post /file/upload
+
+	@doc "base64 文件上传"
+	@handler uploadBase64File
+	post /file/base64 (Base64FileUploadReq)
+
+	@doc "mac地址"
+	@handler MAC
+	get /mac
+}
+
+// 字典
+@server (
+	group:      config/dictionaries
+	middleware: AuthMiddleware
+)
+service backend-api {
+	@doc "创建字典"
+	@handler Create
+	post /dictionaries (RecordReq)
+
+	@doc "更新字典"
+	@handler Update
+	put /dictionary (TRFParams)
+
+	@doc "字典列表"
+	@handler List
+	post /dictionary/list (TRFParams)
+
+	@doc "字典详情"
+	@handler Row
+	get /dictionary/:id (IdQuery)
+
+	@doc "删除"
+	@handler Delete
+	delete /dictionaries (TRFParams)
+
+	@doc "字典结构树"
+	@handler Trees
+	get /dictionary/trees
+
+	@doc "检查uniqueId"
+	@handler CheckUniqueId
+	get /dictionary/check/:uniqueId (UniqueIdQuery)
+}
+
+// 录像计划
+@server (
+	group:      config/vp
+	middleware: AuthMiddleware
+)
+service backend-api {
+	@doc "创建"
+	@handler Create
+	post /video-project (RecordReq)
+
+	@doc "更新"
+	@handler Update
+	put /video-project (TRFParams)
+
+	@doc "列表"
+	@handler List
+	post /video-project/list (TRFParams)
+
+	@doc "详情"
+	@handler Row
+	get /video-project/:id (IdQuery)
+
+	@doc "删除"
+	@handler Delete
+	delete /video-project (TRFParams)
+}
+
+// 任务管理
+@server (
+	group:      config/crontab
+	middleware: AuthMiddleware
+)
+service backend-api {
+	@doc "创建"
+	@handler Create
+	post /crontab (RecordReq)
+
+	@doc "更新"
+	@handler Update
+	put /crontab (TRFParams)
+
+	@doc "列表"
+	@handler List
+	post /crontab/list (TRFParams)
+
+	@doc "详情"
+	@handler Row
+	get /crontab/:uniqueId (UniqueIdQuery)
+
+	@doc "删除"
+	@handler Delete
+	delete /crontab (TRFParams)
+}
+
+// 设备管理
+@server (
+	group:      device/items
+	middleware: AuthMiddleware
+)
+service backend-api {
+	@doc "创建"
+	@handler Create
+	post /device/item (RecordReq)
+
+	@doc "更新"
+	@handler Update
+	put /device/item (TRFParams)
+
+	@doc "列表"
+	@handler List
+	post /device/item/list (TRFParams)
+
+	@doc "详情"
+	@handler Row
+	get /device/item/:id (IdQuery)
+
+	@doc "详情uniqueId"
+	@handler RowWithUniqueId
+	get /device/item-u/:uniqueId (UniqueIdQuery)
+
+	@doc "删除"
+	@handler Delete
+	delete /device/item (TRFParams)
+}
+
+// 通道管理
+@server (
+	group:      device/channels
+	middleware: AuthMiddleware
+)
+service backend-api {
+	@doc "创建"
+	@handler Create
+	post /device/channel (RecordReq)
+
+	@doc "更新"
+	@handler Update
+	put /device/channel (TRFParams)
+
+	@doc "列表"
+	@handler List
+	post /device/channel/list (TRFParams)
+
+	@doc "详情"
+	@handler Row
+	get /device/channel/:id (IdQuery)
+
+	@doc "详情条件获取"
+	@handler RowWithReq
+	post /device/channel-with-params (TRFParams)
+
+	@doc "删除"
+	@handler Delete
+	delete /device/channel (TRFParams)
+}
+
+// media server管理
+@server (
+	group:      config/ms
+	middleware: AuthMiddleware
+)
+service backend-api {
+	@doc "创建"
+	@handler Create
+	post /ms (RecordReq)
+
+	@doc "更新"
+	@handler Update
+	put /ms (TRFParams)
+
+	@doc "列表"
+	@handler List
+	post /ms/list (TRFParams)
+
+	@doc "详情"
+	@handler Row
+	get /ms/:id (IdQuery)
+
+	@doc "删除"
+	@handler Delete
+	delete /ms (TRFParams)
+
+	@doc "options"
+	@handler Options
+	get /ms-options
+}
+
+type SetEnvReq {
+	Content string `json:"content"`
+}
+
+// 服务器配置管理
+@server (
+	group:      config/env
+	middleware: AuthMiddleware
+)
+service backend-api {
+	@doc "更新"
+	@handler Update
+	put /env (SetEnvReq)
+
+	@doc "详情"
+	@handler Row
+	get /env
+}
+
+type QueryVideoRecordsReq {
+	ChannelUniqueId string  `json:"channelUniqueId,optional"`
+	DeviceUniqueId  string  `json:"deviceUniqueId,optional"`
+	Page            uint64  `json:"page,optional"`
+	Limit           uint64  `json:"limit,optional"`
+	StartDate       uint64  `json:"startDate,optional"`
+	EndDate         uint64  `json:"endDate,optional"`
+	SortDate        *string `json:"sortDate,optional"`
+	Urgent          *bool   `json:"urgent,optional"`
+	SortUrgent      *string `json:"sortUrgent,optional"`
+	Day             int64   `json:"day,optional"`
+}
+
+type QueryDateContainsReq {
+	ChannelUniqueId string `json:"channelUniqueId"`
+	DeviceUniqueId  string `json:"deviceUniqueId"`
+	Date            uint64 `json:"date"`
+}
+
+type VideoDeviceDownloadReq {
+	UniqueId        string `json:"uniqueId"`
+	ChannelUniqueId string `json:"channelUniqueId"`
+	DeviceUniqueId  string `json:"deviceUniqueId"`
+	StartAt         uint64 `json:"startAt"`
+	EndAt           uint64 `json:"endAt"`
+}
+
+// 设备录像
+@server (
+	group:      videos/devices
+	middleware: AuthMiddleware
+)
+service backend-api {
+	@doc "列表"
+	@handler List
+	post /video/devices (QueryVideoRecordsReq)
+
+	@doc "下载"
+	@handler Download
+	post /video/devices/download (VideoDeviceDownloadReq)
+}
+
+// 平台录像
+@server (
+	group:      videos/sk
+	middleware: AuthMiddleware
+)
+service backend-api {
+	@doc "列表"
+	@handler List
+	post /video/sk (QueryVideoRecordsReq)
+
+	@doc "获取指定时间录像"
+	@handler FindWithTime
+	post /video/sk/find-with-time (QueryVideoRecordsReq)
+
+	@doc "时间检测"
+	@handler DateContains
+	post /video/sk-date-contains (QueryDateContainsReq)
+
+	@doc "删除"
+	@handler Delete
+	delete /video/sk (TRFParams)
+}
+
+// 报警记录
+@server (
+	group:      device/alarms
+	middleware: AuthMiddleware
+)
+service backend-api {
+	@doc "列表"
+	@handler List
+	post /device/alarm/list (TRFParams)
+
+	@doc "删除"
+	@handler Delete
+	delete /device/alarm (TRFParams)
+}
+
+type (
+	DCReq {
+		ChannelUniqueId string `json:"channelUniqueId,optional"`
+		DeviceUniqueId  string `json:"deviceUniqueId,optional"`
+		MsID            uint64 `json:"msID,optional"`
+	}
+	MsQueryRecordByNameReq {
+		StreamNames     []string `json:"streamNames"`
+		RecordType      uint     `json:"recordType"`
+		ChannelUniqueId string   `json:"channelUniqueId,optional"`
+		DeviceUniqueId  string   `json:"deviceUniqueId,optional"`
+	}
+	SetSMSConfigReq {
+		reboot bool                   `json:"reboot,optional"`
+		delay  int                    `json:"delay,optional"`
+		IP     string                 `json:"ip"`
+		Port   int                    `json:"port"`
+		config map[string]interface{} `json:"config,optional"`
+	}
+	MSConfigReq {
+		IP   string `json:"ip"`
+		Port int    `json:"port"`
+	}
+	VideoStreamInfoReq {
+		StreamName string `path:"streamName"`
+		ID         uint64 `path:"id"`
+	}
+	DeviceUniqueIdReq {
+		DeviceUniqueId string `path:"deviceUniqueId"`
+	}
+)
+
+// 内部调用
+@server (
+	group:      internalCall
+	middleware: AuthMiddleware
+)
+service backend-api {
+	@doc "获取所有流组信息"
+	@handler MSAllGroups
+	post /internal/ms/all-groups (DCReq)
+
+	@doc "按录像流名称列表查询服务录像"
+	@handler MSQueryRecordByNames
+	post /internal/ms/query-record-by-names (MsQueryRecordByNameReq)
+
+	@doc "获取流媒体服务简略配置信息"
+	@handler MSConfigBrief
+	post /internal/ms/config (MSConfigReq)
+
+	@doc "设置流媒体服务重要配置参数并重启服务"
+	@handler MSReload
+	post /internal/ms/reload (SetSMSConfigReq)
+
+	@doc "视频播放获取播放地址"
+	@handler VideoStream
+	post /internal/vss/video/stream
+
+	@doc "停止流"
+	@handler VideoStreamStop
+	post /internal/vss/video/stop
+
+	@doc "获取流信息"
+	@handler VideoStreamQuery
+	get /internal/vss/video/stream/:id/:streamName (VideoStreamInfoReq)
+
+	@doc "gbs发送catalog请求"
+	@handler GBSCatalog
+	get /internal/vss/gbs/catalog/:deviceUniqueId (DeviceUniqueIdReq)
+
+	@doc "gbc发送catalog请求"
+	@handler GBCCatalog
+	post /internal/vss/gbc/catalog
+
+	@doc "设备控制"
+	@handler DeviceControl
+	post /internal/vss/device-control
+
+	@doc "视频回放控制"
+	@handler PlaybackControl
+	post /internal/vss/gbs/playback-control
+
+	@doc "探测设备"
+	@handler OnvifDiscover
+	get /internal/vss/onvif/discover
+
+	@doc "获取设备信息"
+	@handler OnvifDeviceInfo
+	post /internal/vss/onvif/device-info
+
+	@doc "设置预设位"
+	@handler PresetPoint
+	post /internal/vss/preset-point
+
+	@doc "获取预设位"
+	@handler PresetPoints
+	post /internal/vss/preset-points
+
+	@doc "ws token"
+	@handler WSToken
+	get /internal/vss/ws-token
+}
+
