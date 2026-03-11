@@ -125,13 +125,13 @@ func (l *CreateLogic) Create(req *types.RecordReq) (interface{}, *response.HttpE
 			return 0, response.MakeError(response.NewHttpRespMessage().Str("流媒体传输模式值错误"), localization.MR1004)
 		}
 
-		if record.Username == "" {
-			return 0, response.MakeError(response.NewHttpRespMessage().Str("用户名不能为空"), localization.MR1004)
-		}
-
-		if record.Password == "" {
-			return 0, response.MakeError(response.NewHttpRespMessage().Str("密码不能为空"), localization.MR1004)
-		}
+		// if record.Username == "" {
+		// 	return 0, response.MakeError(response.NewHttpRespMessage().Str("用户名不能为空"), localization.MR1004)
+		// }
+		//
+		// if record.Password == "" {
+		// 	return 0, response.MakeError(response.NewHttpRespMessage().Str("密码不能为空"), localization.MR1004)
+		// }
 
 		// streamUrl
 		urlRes, err := functions.ExtractBaseURL(record.StreamUrl)
