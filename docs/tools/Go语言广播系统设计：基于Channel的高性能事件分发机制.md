@@ -2,7 +2,7 @@
 
 在后端系统架构中，事件广播是一种常见的通信模式。本文将深入分析一个基于Go语言channel实现的广播管理器，探讨其设计思想、实现细节以及在实际项目中的应用价值。
 
-参考代码 [点击直达](https://github.com/yyyirl/go-vss/blob/main/core/pkg/broadcast/main.go)
+参考代码 [点击直达](https://github.com/openskeye/go-vss/blob/main/core/pkg/broadcast/main.go)
 
 ## 背景与需求
 
