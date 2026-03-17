@@ -11,7 +11,6 @@ import (
 	"golang.org/x/image/font"
 
 	"skeyevss/core/constants"
-	"skeyevss/core/pkg/contextx"
 	"skeyevss/core/pkg/functions"
 )
 
@@ -91,7 +90,7 @@ func (c *CaptchaPos) Make() (*Response, error) {
 		Key:   key,
 		Chars: chars,
 	}
-	if contextx.GetReqDev(c.conf.Ctx) == constants.ENV_DEVELOPMENT {
+	if c.conf.Mode == constants.ENV_DEVELOPMENT {
 		data.Dots = dots
 	}
 

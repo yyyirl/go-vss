@@ -8,6 +8,7 @@ package imgcaptcha
 
 import (
 	"context"
+
 	"github.com/wenlng/go-captcha/captcha"
 )
 
@@ -36,6 +37,8 @@ type (
 
 	CaptchaConf struct {
 		Ctx context.Context
+
+		Mode string
 		// 秘钥
 		Key string
 		// 过期时间
