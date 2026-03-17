@@ -4,19 +4,26 @@
 
 package gatekeeper
 
-import "skeyevss/core/pkg/redis"
+import (
+	"skeyevss/core/pkg/redis"
+
+	"sync"
+)
 
 type (
-	CacheItem struct {
-		ID     string
-		Expire uint64
-	}
-
 	Gatekeeper struct {
 		RedisClient *redis.GoRedisClient
-		Key         string // 秘钥
+		Key         string
 		Node        string
-		Expire      uint64 // 过期时间 毫秒
+		Expire      uint64
+		stopChan    chan struct{}
+		once        sync.Once
+		rateLimit   int64 // 每秒允许的请求数
+	}
+
+	CacheItem struct {
+		ID     string `json:"id"`
+		Expire uint64 `json:"expire"`
 	}
 )
 
