@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"skeyevss/core/pkg/functions"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	gormLogger "gorm.io/gorm/logger"
@@ -70,29 +71,33 @@ var (
 	logFileChan         = make(chan *logChanType, 100)
 	sipLogFile          *os.File
 	sipLogFileCreatedAt int64
+	logFileDroppedCount int64
 )
 
 func init() {
 	go logToFile()
+
+	go reportLogDropped()
 }
 
 func logToFile() {
-	defer func() {
-		_ = sipLogFile.Close()
-	}()
-
 	for {
 		select {
 		case data := <-logFileChan:
 			var now = functions.NewTimer().Now()
 			if now-sipLogFileCreatedAt >= 24*3600 {
-				_ = sipLogFile.Close()
-				sipLogFile = nil
+				if sipLogFile != nil {
+					_ = sipLogFile.Close()
+					sipLogFile = nil
+				}
 			}
 
 			if sipLogFile == nil {
-				var err error
-				sipLogFile, err = os.OpenFile(path.Join(data.dir, fmt.Sprintf("%s.log", functions.NewTimer().Format("ymd"))), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+				var (
+					err  error
+					file = path.Join(data.dir, fmt.Sprintf("%s.log", functions.NewTimer().Format("ymd")))
+				)
+				sipLogFile, err = os.OpenFile(file, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 				if err != nil {
 					fmt.Println("日志文件的打开错误 :", err)
 					continue
@@ -104,6 +109,20 @@ func logToFile() {
 				fmt.Println("写入日志文件错误 :", err)
 			}
 		}
+	}
+}
+
+func reportLogDropped() {
+	var ticker = time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		var dropped = atomic.SwapInt64(&logFileDroppedCount, 0)
+		if dropped <= 0 {
+			continue
+		}
+
+		functions.LogError("orm logger: 写文件队列已满，本周期丢弃日志数量: ", dropped)
 	}
 }
 
@@ -209,7 +228,7 @@ func (logger *StdFileLogger) Warn(ctx context.Context, msg string, data ...inter
 			fileCaller = v + "\n		    " + fileCaller
 		}
 
-		logger.xPrintf(logger.infoStr+msg, append([]interface{}{fileCaller}, data...)...)
+		logger.xPrintf(logger.warnStr+msg, append([]interface{}{fileCaller}, data...)...)
 	}
 }
 
@@ -224,7 +243,7 @@ func (logger *StdFileLogger) Error(ctx context.Context, msg string, data ...inte
 			fileCaller = v + "\n		    " + fileCaller
 		}
 
-		logger.xPrintf(logger.infoStr+msg, append([]interface{}{fileCaller}, data...)...)
+		logger.xPrintf(logger.errStr+msg, append([]interface{}{fileCaller}, data...)...)
 	}
 }
 
@@ -286,9 +305,16 @@ func (logger *StdFileLogger) PrintStackTrace(_ error) string {
 }
 
 func (logger *StdFileLogger) LogToFile(dir, content string) {
-	logFileChan <- &logChanType{
+	select {
+	case logFileChan <- &logChanType{
 		content: content,
 		dir:     dir,
+	}:
+		return
+
+	default:
+		atomic.AddInt64(&logFileDroppedCount, 1)
+		return
 	}
 }
 

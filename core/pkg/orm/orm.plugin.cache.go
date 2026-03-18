@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 
 	cache "github.com/patrickmn/go-cache"
 	"gorm.io/gorm"
@@ -54,56 +55,56 @@ func (c *CachePlugin) Name() string {
 	return "cachePlugin"
 }
 
-func (c *CachePlugin) Initialize(db *gorm.DB) (err error) {
+func (c *CachePlugin) Initialize(db *gorm.DB) error {
 	if err := db.Callback().Create().Before("gorm:before_create").Register(registerNameBeforeCreate, c.beforeCreate); err != nil {
-		panic(err)
+		return err
 	}
 
 	if err := db.Callback().Query().Before("gorm:query").Register(registerNameBeforeQuery, c.beforeQuery); err != nil {
-		panic(err)
+		return err
 	}
 
 	if err := db.Callback().Delete().Before("gorm:before_delete").Register(registerNameBeforeDelete, c.beforeDelete); err != nil {
-		panic(err)
+		return err
 	}
 
 	if err := db.Callback().Update().Before("gorm:setup_reflect_value").Register(registerNameBeforeUpdate, c.beforeUpdate); err != nil {
-		panic(err)
+		return err
 	}
 
 	if err := db.Callback().Row().Before("gorm:row").Register(registerNameBeforeRow, c.beforeRow); err != nil {
-		panic(err)
+		return err
 	}
 
 	if err := db.Callback().Raw().Before("gorm:raw").Register(registerNameBeforeRaw, c.beforeRaw); err != nil {
-		panic(err)
+		return err
 	}
 
 	if err := db.Callback().Create().After("gorm:after_create").Register(registerNameAfterCreate, c.afterCreate); err != nil {
-		panic(err)
+		return err
 	}
 
 	if err := db.Callback().Query().After("gorm:after_query").Register(registerNameAfterQuery, c.afterQuery); err != nil {
-		panic(err)
+		return err
 	}
 
 	if err := db.Callback().Delete().After("gorm:after_delete").Register(registerNameAfterDelete, c.afterDelete); err != nil {
-		panic(err)
+		return err
 	}
 
 	if err := db.Callback().Update().After("gorm:after_update").Register(registerNameAfterUpdate, c.afterUpdate); err != nil {
-		panic(err)
+		return err
 	}
 
 	if err := db.Callback().Row().After("gorm:row").Register(registerNameAfterRow, c.afterRow); err != nil {
-		panic(err)
+		return err
 	}
 
 	if err := db.Callback().Raw().After("gorm:raw").Register(registerNameAfterRaw, c.afterRaw); err != nil {
-		panic(err)
+		return err
 	}
 
-	return
+	return nil
 }
 
 func (c *CachePlugin) beforeCreate(db *gorm.DB) {
@@ -315,29 +316,81 @@ func (c *CachePlugin) after(name string, db *gorm.DB) {
 	}
 
 	if driver, ok := (cacheAdvance.Driver).(CacheDriver); ok {
-		data, uniqueId := c.getCacheItem(db)
+		data, uniqueId, table := c.getCacheItem(db)
 		// 设置缓存
 		if setCache {
 			driver.Set(cacheAdvance, c.Drivers, uniqueId, data)
 		}
 		// 删除缓存
 		if deleteCache {
-			driver.Delete(cacheAdvance, c.Drivers, uniqueId)
+			c.deleteCacheByTable(cacheAdvance, table)
 		}
 	}
 }
 
-func (c *CachePlugin) getCacheItem(db *gorm.DB) (item *CacheItem, uniqueId string) {
-	var sql = db.Dialector.Explain(db.Statement.SQL.String(), db.Statement.Vars...)
+func (c *CachePlugin) getCacheItem(db *gorm.DB) (item *CacheItem, uniqueId string, table string) {
+	callbacks.BuildQuerySQL(db)
+
+	var (
+		sql       = db.Dialector.Explain(db.Statement.SQL.String(), db.Statement.Vars...)
+		tableName = c.getTableName(db)
+	)
 	item = &CacheItem{
 		Sql:  sql,
 		Data: db.Statement.Dest,
 	}
-	uniqueId = functions.Md5String(sql)
+
+	// key 结构: prefix:table:md5(sql):data|sql
+	table = tableName
+	uniqueId = tableName + ":" + functions.Md5String(sql)
+
 	return
 }
 
 func (c *CachePlugin) getCacheId(db *gorm.DB) string {
 	callbacks.BuildQuerySQL(db)
-	return functions.Md5String(db.Dialector.Explain(db.Statement.SQL.String(), db.Statement.Vars...))
+	var (
+		sql       = db.Dialector.Explain(db.Statement.SQL.String(), db.Statement.Vars...)
+		tableName = c.getTableName(db)
+	)
+
+	return tableName + ":" + functions.Md5String(sql)
+}
+
+func (c *CachePlugin) getTableName(db *gorm.DB) string {
+	if db.Statement != nil && db.Statement.Table != "" {
+		return db.Statement.Table
+	}
+
+	if db.Statement != nil && db.Statement.Model != nil {
+		if model, ok := (db.Statement.Model).(Model); ok {
+			return model.TableName()
+		}
+	}
+
+	return "unknown"
+}
+
+func (c *CachePlugin) deleteCacheByTable(advanced *UseCacheAdvanced, table string) {
+	if advanced == nil || advanced.CacheKeyPrefix == "" || table == "" {
+		return
+	}
+
+	var prefix = advanced.CacheKeyPrefix + ":" + table + ":"
+
+	if c.Drivers != nil && c.Drivers.RedisClient != nil {
+		// 这里使用 Keys 做“按表清空”，简单但粗暴。适用于缓存 key 数量可控的场景。
+		var keys, err = c.Drivers.RedisClient.Keys(prefix + "*")
+		if err == nil && len(keys) > 0 {
+			_, _ = c.Drivers.RedisClient.Del(keys...)
+		}
+	}
+
+	if c.Drivers != nil && c.Drivers.MemoryCache != nil {
+		for key := range c.Drivers.MemoryCache.Items() {
+			if strings.HasPrefix(key, prefix) {
+				c.Drivers.MemoryCache.Delete(key)
+			}
+		}
+	}
 }

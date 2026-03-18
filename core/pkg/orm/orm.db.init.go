@@ -50,6 +50,8 @@ func newConnect(c *DBConnectConfig, dialector gorm.Dialector, Type string) DB {
 		// 日志输出
 		logFilePath = ""
 	)
+
+	defer ticker.Stop()
 	if c.Databases.SaveSqlDir != "" {
 		logFilePath = c.Databases.SaveSqlDir + "/" + Type
 		_ = functions.MakeDir(logFilePath)
@@ -95,7 +97,6 @@ func newConnect(c *DBConnectConfig, dialector gorm.Dialector, Type string) DB {
 	_db.SetMaxOpenConns(2000)
 	_db.SetConnMaxLifetime(30 * time.Second)
 
-	ticker.Stop()
 	return db
 }
 

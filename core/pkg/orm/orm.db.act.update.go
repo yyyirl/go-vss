@@ -169,7 +169,7 @@ func (d *DBX[T]) takeUpdateBulk(primaryKey string, updateAllowedColumns []string
 				continue
 			}
 
-			return "", nil, fmt.Errorf("BulkUpdate字段`%s`未知类型: `%T`, value: %+v", item.Val, item.PK, item.Val)
+			return "", nil, fmt.Errorf("BulkUpdate字段`%s`未知类型: `%T`, value: %+v", val.Column, item.Val, item.Val)
 		}
 
 		if !functions.Contains(val.Column, updateAllowedColumns) {

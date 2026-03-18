@@ -21,12 +21,24 @@ func (d *DBX[T]) Find(ctx context.Context, dbInstance DB, findClosure func(conte
 }
 
 func (d *DBX[T]) FindWithIds(ctx context.Context, dbInstance DB, ids []any) ([]*T, error) {
-	var models []*T = nil
+	if len(ids) <= 0 {
+		return make([]*T, 0), nil
+	}
+
+	var (
+		model  T
+		pk     = model.PrimaryKey()
+		models = make([]*T, 0)
+	)
+	if pk == "" {
+		return nil, errors.New("PrimaryKey 不能为空")
+	}
+
 	if err := d.Find(ctx, dbInstance, func(ctx context.Context, db DB) DB {
-		return db.WithContext(ctx).Where(ids).Find(&models)
+		return db.WithContext(ctx).Where(pk+" IN ?", ids).Find(&models)
 	}); err != nil {
 		if errors.Is(err, NotFound) {
-			return nil, nil
+			return make([]*T, 0), nil
 		}
 
 		return nil, err
@@ -90,9 +102,6 @@ func (d *DBX[T]) Count(ctx context.Context, dbInstance DB, findClosure func(cont
 		res   = findClosure(ctx, dbInstance.Model(new(T))).Count(&count)
 	)
 	if res.Error != nil {
-		if errors.Is(res.Error, NotFound) {
-			return 0, nil
-		}
 		return 0, res.Error
 	}
 
@@ -102,7 +111,7 @@ func (d *DBX[T]) Count(ctx context.Context, dbInstance DB, findClosure func(cont
 // ---------------------------------------------------- 聚合
 
 func (d *DBX[T]) aggregate(ctx context.Context, dbInstance DB, function string, column string, value interface{}, findClosure func(context.Context, DB) DB) error {
-	var res = findClosure(ctx, dbInstance.Model(new(T))).Select("IFNULL(" + function + "(" + column + "), 0)").Scan(&value)
+	var res = findClosure(ctx, dbInstance.Model(new(T))).Select("COALESCE(" + function + "(" + column + "), 0)").Scan(&value)
 	if res.Error != nil {
 		if errors.Is(res.Error, NotFound) {
 			return nil

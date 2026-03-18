@@ -38,6 +38,53 @@ type (
 	}
 )
 
+func (c *ConditionBuild[T]) validateOriginalQuery(query string, values []interface{}) error {
+	var q = strings.TrimSpace(query)
+	if q == "" {
+		return errors.New("original query 不能为空")
+	}
+
+	// 禁止明显的多语句/注释注入
+	if strings.Contains(q, ";") || strings.Contains(q, "--") || strings.Contains(q, "/*") || strings.Contains(q, "*/") {
+		return errors.New("original query 包含非法字符")
+	}
+
+	// 禁止 DDL/DML 关键字（防止把 where 片段变成完整语句）
+	var lower = strings.ToLower(q)
+	for _, kw := range []string{"select ", "insert ", "update ", "delete ", "drop ", "truncate ", "alter ", "create "} {
+		if strings.Contains(lower, kw) {
+			return errors.New("original query 包含非法关键字")
+		}
+	}
+
+	// 校验占位符数量
+	var (
+		placeholderCount = strings.Count(q, "?")
+		valueCount       = len(values)
+	)
+	if placeholderCount != valueCount {
+		return fmt.Errorf("original query 占位符数量不匹配: 期望 %d, 实际 %d", placeholderCount, valueCount)
+	}
+
+	return nil
+}
+
+func (c *ConditionBuild[T]) quoteColumn(column string) string {
+	switch strings.ToLower(c.databaseType) {
+	case DBTypePostgres:
+		return `"` + column + `"`
+
+	case DBTypeSqlserver:
+		return `[` + column + `]`
+
+	case DBTypeMysql, DBTypeSqlite:
+		fallthrough
+
+	default:
+		return "`" + column + "`"
+	}
+}
+
 func (c *ConditionItem) operatorValidate() bool {
 	if c.Operator == "" {
 		c.Operator = "="
@@ -142,6 +189,10 @@ func (c *ConditionBuild[T]) Do(emptyCondition bool) (string, []interface{}, erro
 		}
 
 		if item.Original != nil && item.Original.Query != "" {
+			if err := c.validateOriginalQuery(item.Original.Query, item.Original.Values); err != nil {
+				return "", nil, err
+			}
+
 			wheres = append(wheres, fmt.Sprintf(" %s (%s)", item.LogicalOperator, item.Original.Query))
 			placeholders = append(placeholders, item.Original.Values...)
 			continue
@@ -161,9 +212,9 @@ func (c *ConditionBuild[T]) Do(emptyCondition bool) (string, []interface{}, erro
 			wheres = append(
 				wheres,
 				fmt.Sprintf(
-					" %s `%s` %s (%s)",
+					" %s %s %s (%s)",
 					item.LogicalOperator,
-					item.Column,
+					c.quoteColumn(item.Column),
 					operator,
 					strings.Trim(strings.Repeat("?,", len(item.Values)), ","),
 				),
@@ -172,12 +223,23 @@ func (c *ConditionBuild[T]) Do(emptyCondition bool) (string, []interface{}, erro
 			placeholders = append(placeholders, item.Values...)
 			continue
 		}
-		wheres = append(wheres, fmt.Sprintf(" %s `%s` %s ?", item.LogicalOperator, item.Column, item.Operator))
-		if item.Operator == "like" {
+
+		var (
+			op     = strings.ToLower(item.Operator)
+			column = c.quoteColumn(item.Column)
+		)
+		wheres = append(wheres, fmt.Sprintf(" %s %s %s ?", item.LogicalOperator, column, item.Operator))
+		if op == "like" {
 			placeholders = append(placeholders, fmt.Sprintf("%%%v%%", item.Value))
-		} else {
-			placeholders = append(placeholders, item.Value)
+			continue
 		}
+
+		if op == "llike" {
+			placeholders = append(placeholders, fmt.Sprintf("%%%v", item.Value))
+			continue
+		}
+
+		placeholders = append(placeholders, item.Value)
 	}
 
 	var where string
