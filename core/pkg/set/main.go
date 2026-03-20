@@ -1,133 +1,172 @@
+// @Title        并发安全的泛型集合
+// @Description  基于 map[T]struct{}
+// @Create       yiyiyi 2025/9/5 09:03
 package set
 
-import (
-	"iter"
-	"sync"
-)
+import "sync"
 
 type (
-	Set[T comparable] map[T]struct{}
+	setMap[T comparable] map[T]struct{}
 
 	CSet[T comparable] struct {
-		data Set[T]
-		rw   sync.RWMutex
+		data setMap[T]
+
+		rw sync.RWMutex
 	}
 )
 
-// --- MARK CSet methods
-
-func New[T comparable](n uint) *CSet[T] {
+func New[T comparable](hint uint) *CSet[T] {
 	return &CSet[T]{
-		data: newSet[T](n),
+		data: newSetMap[T](hint),
 	}
 }
 
+// Add 将元素并入集合
 func (m *CSet[T]) Add(elements ...T) {
+	if m == nil || len(elements) == 0 {
+		return
+	}
+
 	m.rw.Lock()
 	defer m.rw.Unlock()
+
 	m.data.add(elements...)
 }
 
-func (m *CSet[T]) Remove(ele T) {
+// Remove 从集合删除给定元素
+func (m *CSet[T]) Remove(elements ...T) {
+	if m == nil || len(elements) == 0 {
+		return
+	}
+
 	m.rw.Lock()
 	defer m.rw.Unlock()
-	m.data.remove(ele)
+
+	for _, ele := range elements {
+		m.data.remove(ele)
+	}
 }
 
-func (m *CSet[T]) clear() {
+// Clear 清空集合
+func (m *CSet[T]) Clear() {
+	if m == nil {
+		return
+	}
+
 	m.rw.Lock()
 	defer m.rw.Unlock()
+
 	m.data.clear()
 }
 
+// Contains 判断元素是否存在(读锁)
 func (m *CSet[T]) Contains(ele T) bool {
+	if m == nil {
+		return false
+	}
+
 	m.rw.RLock()
 	defer m.rw.RUnlock()
+
 	return m.data.contains(ele)
 }
 
+// IsEmpty 是否无任何元素
 func (m *CSet[T]) IsEmpty() bool {
+	if m == nil {
+		return true
+	}
+
 	m.rw.RLock()
 	defer m.rw.RUnlock()
+
 	return m.data.isEmpty()
 }
 
+// Size 返回元素个数
 func (m *CSet[T]) Size() int {
+	if m == nil {
+		return 0
+	}
+
 	m.rw.RLock()
 	defer m.rw.RUnlock()
+
 	return m.data.size()
 }
 
+// Range 对当前集合快照逐一枚举 f 返回 false 时提前结束
+// 快照在持锁期间复制键,f 执行时已释放锁,因此 f 内可再次调用本 CSet 的其它方法(避免在持读锁的遍历回调里写同集合导致死锁)
 func (m *CSet[T]) Range(f func(ele T) bool) {
-	m.rw.RLock()
-	defer m.rw.RUnlock()
+	if m == nil || f == nil {
+		return
+	}
 
-	for k := range m.data {
+	var keys = m.snapshotKeys()
+	for _, k := range keys {
 		if !f(k) {
 			break
 		}
 	}
 }
 
+// Values 返回当前集合元素切片(快照顺序未定义,与 map 遍历一致) nil 接收者返回 nil
 func (m *CSet[T]) Values() []T {
+	if m == nil {
+		return nil
+	}
+
+	return m.snapshotKeys()
+}
+
+func (m *CSet[T]) snapshotKeys() []T {
 	m.rw.RLock()
 	defer m.rw.RUnlock()
 
-	var (
-		length = m.data.size()
-		values = make([]T, length, length)
-
-		i = 0
-	)
-	for k := range m.data.values() {
-		values[i] = k
-		i++
+	if len(m.data) == 0 {
+		return nil
 	}
 
-	return values
+	var out = make([]T, 0, len(m.data))
+	for k := range m.data {
+		out = append(out, k)
+	}
+
+	return out
 }
 
-// --- MARK set methods
+// -------- 底层 setMap(无锁,仅由 CSet 在持锁下使用) --------
 
-func newSet[T comparable](n uint) Set[T] {
-	return make(Set[T], n)
+func newSetMap[T comparable](n uint) setMap[T] {
+	return make(setMap[T], n)
 }
 
-func (set Set[T]) add(elements ...T) {
+func (s setMap[T]) add(elements ...T) {
 	for _, item := range elements {
-		set[item] = struct{}{}
+		s[item] = struct{}{}
 	}
 }
 
-func (set Set[T]) contains(ele T) bool {
-	_, ok := set[ele]
+func (s setMap[T]) contains(ele T) bool {
+	_, ok := s[ele]
+
 	return ok
 }
 
-func (set Set[T]) remove(ele T) {
-	delete(set, ele)
+func (s setMap[T]) remove(ele T) {
+	delete(s, ele)
 }
 
-func (set Set[T]) isEmpty() bool {
-	return len(set) == 0
+func (s setMap[T]) isEmpty() bool {
+	return len(s) == 0
 }
 
-func (set Set[T]) size() int {
-	return len(set)
+func (s setMap[T]) size() int {
+	return len(s)
 }
 
-func (set Set[T]) clear() {
-	for k := range set {
-		delete(set, k)
-	}
-}
-
-func (set Set[T]) values() iter.Seq[T] {
-	return func(yield func(T) bool) {
-		for v := range set {
-			if !yield(v) {
-				return
-			}
-		}
+func (s setMap[T]) clear() {
+	for k := range s {
+		delete(s, k)
 	}
 }
