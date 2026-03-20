@@ -134,7 +134,7 @@ func (l *SendLogic) DO(params *types.DOProcLogicParams) {
 
 // 发送catalog请求
 func (l *SendLogic) catalog(req *types.Request) error {
-	dt.TrailingDebounce(
+	dt.ThrottleFixedGridTrailing(
 		req.ID,
 		3*time.Second,
 		func() {
