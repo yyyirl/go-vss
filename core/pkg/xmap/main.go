@@ -9,14 +9,15 @@ package xmap
 import "sync"
 
 type (
-	// XMap 泛型线程安全的Map结构
+	// XMap 泛型线程安全 Map；零值为 nil，须使用 New 创建后使用
 	XMap[K comparable, V any] struct {
-		mutex sync.RWMutex // 读写锁，保证并发安全
-		data  map[K]V      // 实际存储数据的map
-		size  int          // 初始化容量，用于make优化
+		mutex sync.RWMutex
+		data  map[K]V
+		// capHint 为构造时传入的容量提示
+		capHint int
 	}
 
-	// RecordType 键值对记录类型
+	// RecordType 键值对记录，用于 Records / 快照遍历
 	RecordType[K comparable, V any] struct {
 		Key   K
 		Value V
@@ -24,23 +25,37 @@ type (
 )
 
 // New 创建指定初始容量的XMap
-func New[K comparable, V any](size int) *XMap[K, V] {
+func New[K comparable, V any](capacity int) *XMap[K, V] {
+	var size = capacity
+	if size < 0 {
+		size = 0
+	}
+
 	return &XMap[K, V]{
-		data: make(map[K]V, size),
-		size: size,
+		data:    make(map[K]V, size),
+		capHint: size,
 	}
 }
 
 // Set 设置键值对
 func (x *XMap[K, V]) Set(key K, value V) {
+	if x == nil {
+		return
+	}
+
 	x.mutex.Lock()
 	defer x.mutex.Unlock()
 
 	x.data[key] = value
 }
 
-// Get 获取键对应的值
+// Get 获取键对应的值及是否存在
 func (x *XMap[K, V]) Get(key K) (V, bool) {
+	var zero V
+	if x == nil {
+		return zero, false
+	}
+
 	x.mutex.RLock()
 	defer x.mutex.RUnlock()
 
@@ -50,37 +65,44 @@ func (x *XMap[K, V]) Get(key K) (V, bool) {
 
 // Remove 删除指定键
 func (x *XMap[K, V]) Remove(key K) {
+	if x == nil {
+		return
+	}
+
 	x.mutex.Lock()
 	defer x.mutex.Unlock()
 
 	delete(x.data, key)
 }
 
-// Clear 清空Map
+// Clear 清空Map,按构造时的容量提示重新分配底层 map
 func (x *XMap[K, V]) Clear() {
+	if x == nil {
+		return
+	}
+
 	x.mutex.Lock()
 	defer x.mutex.Unlock()
 
-	// 直接重新分配新map，避免逐个删除元素的开销
-	x.data = make(map[K]V, x.size)
+	x.data = make(map[K]V, x.capHint)
 }
 
-// Keys 返回所有键的切片
+// Keys 返回当前键的快照切片；顺序未定义空表返回 nil
 func (x *XMap[K, V]) Keys() []K {
+	if x == nil {
+		return nil
+	}
+
 	x.mutex.RLock()
 	defer x.mutex.RUnlock()
 
 	if len(x.data) == 0 {
-		return []K{}
+		return nil
 	}
 
-	var (
-		keys = make([]K, len(x.data))
-		i    = 0
-	)
+	var keys = make([]K, 0, len(x.data))
 	for k := range x.data {
-		keys[i] = k
-		i++
+		keys = append(keys, k)
 	}
 
 	return keys
@@ -88,47 +110,48 @@ func (x *XMap[K, V]) Keys() []K {
 
 // Values 返回所有值的切片
 func (x *XMap[K, V]) Values() []V {
+	if x == nil {
+		return nil
+	}
+
 	x.mutex.RLock()
 	defer x.mutex.RUnlock()
 
 	if len(x.data) == 0 {
-		return []V{}
+		return nil
 	}
 
-	var (
-		values = make([]V, len(x.data))
-		i      = 0
-	)
+	var values = make([]V, 0, len(x.data))
 	for _, v := range x.data {
-		values[i] = v
-		i++
+		values = append(values, v)
 	}
 
 	return values
 }
 
-// Records 返回所有键值对记录的切片
+// Records 返回键值对记录切片
 func (x *XMap[K, V]) Records() []*RecordType[K, V] {
+	if x == nil {
+		return nil
+	}
+
 	x.mutex.RLock()
 	defer x.mutex.RUnlock()
 
 	if len(x.data) == 0 {
-		return []*RecordType[K, V]{}
+		return nil
 	}
 
-	var (
-		values = make([]*RecordType[K, V], len(x.data))
-		i      = 0
-	)
+	var records = make([]*RecordType[K, V], 0, len(x.data))
+
 	for k, v := range x.data {
-		values[i] = &RecordType[K, V]{
+		records = append(records, &RecordType[K, V]{
 			Key:   k,
 			Value: v,
-		}
-		i++
+		})
 	}
 
-	return values
+	return records
 }
 
 // All 底层map
@@ -158,6 +181,10 @@ func (x *XMap[K, V]) AllCopy() map[K]V {
 
 // Len 返回元素个数
 func (x *XMap[K, V]) Len() int {
+	if x == nil {
+		return 0
+	}
+
 	x.mutex.RLock()
 	defer x.mutex.RUnlock()
 
@@ -166,6 +193,10 @@ func (x *XMap[K, V]) Len() int {
 
 // Contains 检查键是否存在
 func (x *XMap[K, V]) Contains(key K) bool {
+	if x == nil {
+		return false
+	}
+
 	x.mutex.RLock()
 	defer x.mutex.RUnlock()
 
@@ -173,8 +204,12 @@ func (x *XMap[K, V]) Contains(key K) bool {
 	return ok
 }
 
-// GetOrSet 获取值，如果不存在则设置默认值
+// GetOrSet 若键存在则返回已有值
 func (x *XMap[K, V]) GetOrSet(key K, defaultValue V) V {
+	if x == nil {
+		return defaultValue
+	}
+
 	x.mutex.Lock()
 	defer x.mutex.Unlock()
 
@@ -186,8 +221,12 @@ func (x *XMap[K, V]) GetOrSet(key K, defaultValue V) V {
 	return defaultValue
 }
 
-// SetIfAbsent 如果键不存在则设置值
+// SetIfAbsent 仅当键不存在时设置 value
 func (x *XMap[K, V]) SetIfAbsent(key K, value V) bool {
+	if x == nil {
+		return false
+	}
+
 	x.mutex.Lock()
 	defer x.mutex.Unlock()
 
@@ -201,10 +240,32 @@ func (x *XMap[K, V]) SetIfAbsent(key K, value V) bool {
 
 // ForEach 遍历所有元素
 func (x *XMap[K, V]) ForEach(fn func(key K, value V)) {
+	if x == nil || fn == nil {
+		return
+	}
+
+	var snap = x.snapshotRecords()
+	for _, rec := range snap {
+		fn(rec.Key, rec.Value)
+	}
+}
+
+// snapshotRecords 在锁内复制键值到切片（值拷贝，非指针别名到新 RecordType）
+func (x *XMap[K, V]) snapshotRecords() []RecordType[K, V] {
 	x.mutex.RLock()
 	defer x.mutex.RUnlock()
 
-	for k, v := range x.data {
-		fn(k, v)
+	if len(x.data) == 0 {
+		return nil
 	}
+
+	var out = make([]RecordType[K, V], 0, len(x.data))
+	for k, v := range x.data {
+		out = append(out, RecordType[K, V]{
+			Key:   k,
+			Value: v,
+		})
+	}
+
+	return out
 }
