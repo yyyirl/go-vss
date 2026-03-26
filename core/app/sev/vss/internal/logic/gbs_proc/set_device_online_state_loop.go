@@ -21,7 +21,6 @@ type SetDeviceOnlineStateLogic struct {
 	recoverCall func(name string)
 }
 
-// 定时发送catalog
 func (l *SetDeviceOnlineStateLogic) DO(params *types.DOProcLogicParams) {
 	l = &SetDeviceOnlineStateLogic{
 		svcCtx:      params.SvcCtx,
