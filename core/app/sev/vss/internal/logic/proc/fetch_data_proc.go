@@ -201,8 +201,6 @@ func (l *FetchDataLogic) onvifDiscover() {
 		_ = conn.Close()
 	}()
 
-	data := []byte(wsDiscoveryMessage)
-	p := ipv4.NewPacketConn(conn)
 	// 获取多播地址
 	dst, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:%d", l.svcCtx.Config.Onvif.MulticastIP, l.svcCtx.Config.Onvif.WsDiscoveryPort))
 	if err != nil {
@@ -210,12 +208,17 @@ func (l *FetchDataLogic) onvifDiscover() {
 		return
 	}
 
-	// 获取所有网卡进行组播发Onvif发现包（合理吧）
+	// 获取所有网卡进行组播发Onvif发现包
 	iFaces, err := net.Interfaces()
 	if err != nil {
 		functions.LogError("Failed to get net interfaces: %v", err)
 		return
 	}
+
+	var (
+		data = []byte(wsDiscoveryMessage)
+		p    = ipv4.NewPacketConn(conn)
+	)
 	for _, ifi := range iFaces {
 		if err := p.JoinGroup(&ifi, dst); err != nil {
 			continue
