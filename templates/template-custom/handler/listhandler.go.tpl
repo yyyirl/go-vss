@@ -3,12 +3,11 @@ package {{.ModelName}}
 import (
 	"net/http"
 
-	"github.com/zeromicro/go-zero/rest/httpx"
-
 	"skeyevss/core/app/sev/backend/internal/logic/{{.ModelName}}"
 	"skeyevss/core/app/sev/backend/internal/svc"
 	"skeyevss/core/common/source/permissions"
 	"skeyevss/core/localization"
+	"skeyevss/core/pkg/common"
 	"skeyevss/core/pkg/contextx"
 	"skeyevss/core/pkg/orm"
 	"skeyevss/core/pkg/response"
@@ -23,7 +22,7 @@ func ListHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 		}
 
 		var req orm.ReqParams
-		if err := httpx.Parse(r, &req); err != nil {
+		if err := common.Parse(r, &req); err != nil {
 			response.New().RequestError(ctx, w, response.MakeError(response.NewHttpRespMessage().Err(err), localization.M0001))
 			return
 		}
