@@ -57,7 +57,17 @@ bash ./set-operation-type.sh -name $model_name -name-zh $model_name_zh
 # 设置权限
 echo
 echo -e "开始设置权限 ------------------ \n"
-bash ./set-permissions.sh -name-zh $model_name_zh -name $model_names -server-name "backend"
+output=$(bash ./set-permissions.sh -name-zh $model_name_zh -name $model_names -server-name "backend")
+
+# 从输出中解析变量
+backend_permissions_id=$(echo "$output" | grep "backend_permissions_id=" | cut -d'=' -f2)
+frontend_permissions_id=$(echo "$output" | grep "frontend_permissions_id=" | cut -d'=' -f2)
+echo "backend_permissions_id=$backend_permissions_id"
+echo "frontend_permissions_id=$frontend_permissions_id"
+
+# 生成ts
+echo -e "生成前端代码 ------------------ \n"
+bash ./set-tsx.sh -name $model_name -names $model_names -backend-permissions $backend_permissions_id -frontend-permissions $frontend_permissions_id -model-path "${SERVER_REPOSITORIES_PATH}/models/${model_names}"
 
 echo ""
 echo "✅ ${model_names} 模块创建完成"

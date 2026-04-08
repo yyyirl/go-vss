@@ -36,6 +36,8 @@ export SERVER_ES_TEMPLATE_CUSTOM_PATH=$SERVER_PATH/templates/template-custom/es
 export SERVER_API_LOGIC_TEMPLATE_CUSTOM_PATH=$SERVER_PATH/templates/template-custom/api-logic
 # 自定义模板地址 api handler
 export SERVER_API_HANDLER_TEMPLATE_CUSTOM_PATH=$SERVER_PATH/templates/template-custom/handler
+# 自定义模板地址 tsx
+export TSX_TEMPLATE_CUSTOM_PATH=$SERVER_PATH/templates/template-custom/tsx
 # 自定义模板地址 rpc logic
 export SERVER_RPC_LOGIC_TEMPLATE_CUSTOM_PATH=$SERVER_PATH/templates/template-custom/rpc-logic
 

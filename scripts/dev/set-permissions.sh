@@ -7,6 +7,8 @@ permissions_frontend_file="$MAIN_PATH/core/common/source/permissions/frontend.go
 model_name_zh=$(get_specific_parameter "-name-zh" "$@")
 module_name=$(get_specific_parameter "-name" "$@")
 server_name=$(get_specific_parameter "-server-name" "$@")
+backend_permissions_id=''
+frontend_permissions_id=''
 
 if [ -z "$model_name_zh" ]; then
     echo "-name-zh 不能为空"
@@ -160,6 +162,7 @@ if grep -q "P_0_${next_num_backend}" "$permissions_backend_file"; then
 else
     if process_permission_file "$permissions_backend_file" "P_0" "$next_num_backend" "$model_name_zh"; then
         echo "✅ backend.go 权限已添加 (P_0_${next_num_backend})"
+        backend_permissions_id=P_0_${next_num_backend}
     else
         echo "❌ backend.go 添加失败"
         exit 1
@@ -179,6 +182,7 @@ if grep -q "P_1_${next_num_frontend}" "$permissions_frontend_file"; then
 else
     if process_permission_file "$permissions_frontend_file" "P_1" "$next_num_frontend" "$model_name_zh"; then
         echo "✅ frontend.go 权限已添加 (P_1_${next_num_frontend})"
+        frontend_permissions_id=P_1_${next_num_frontend}
     else
         echo "❌ frontend.go 添加失败"
         exit 1
@@ -205,3 +209,5 @@ $FORMATTER -rm-unused -set-alias -format "${work_path}/updatehandler.go"
 $FORMATTER -rm-unused -set-alias -format "${work_path}/deletehandler.go"
 $FORMATTER -rm-unused -set-alias -format "${work_path}/createhandler.go"
 
+echo "backend_permissions_id=${backend_permissions_id}"
+echo "frontend_permissions_id=${frontend_permissions_id}"
