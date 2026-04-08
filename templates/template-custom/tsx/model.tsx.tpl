@@ -66,11 +66,7 @@ export const columns = (departments: { [ key: number ]: TreeItem }): RowType<Ite
 	}
 ]
 
-interface columnsParams {
-	departments: OptionItem[]
-}
-
-export const formColumns = ({ departments }: columnsParams): Array<XFormItem<Item>> => [
+export const formColumns = (): Array<XFormItem<Item>> => [
 	{
 		dataIndex: 'username',
 		defValue: '',
